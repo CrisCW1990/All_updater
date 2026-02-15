@@ -33,6 +33,8 @@ let isOperationActive = false;
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 function createWindow() {
+    let forceClose = false;
+
     win = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -48,19 +50,22 @@ function createWindow() {
 
     // Protection against closing while updating
     win.on('close', (e) => {
+        if (forceClose) return;
+
         if (isOperationActive) {
             e.preventDefault();
             const choice = dialog.showMessageBoxSync(win!, {
                 type: 'warning',
-                buttons: ['Wait', 'Close Anyway (Dangerous)'],
-                title: 'Operation in Progress',
-                message: 'An application update or restore point is currently in progress. Closing the app now could leave your system or software in an unstable state.',
-                detail: 'It is highly recommended to wait until the process finishes.',
+                buttons: ['Wait / Esperar', 'Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)'],
+                title: 'Operation in Progress / Operacion en progreso',
+                message: 'An application update or restore point is currently in progress. Closing the app now could leave your system or software in an unstable state.\n\nHay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede dejar el sistema o software inestable.',
+                detail: 'It is highly recommended to wait until the process finishes.\nSe recomienda esperar a que el proceso termine.',
                 defaultId: 0,
                 cancelId: 0
             });
 
             if (choice === 1) {
+                forceClose = true;
                 isOperationActive = false; // Allow closing next time
                 win?.close();
             }
@@ -97,21 +102,20 @@ app.on('activate', () => {
     }
 })
 
-import { setupIPC } from '../src/main/ipc.js';
-
-setupIPC();
-
 app.whenReady().then(async () => {
     const isElevated = await ensureElevated();
 
     if (!isElevated) {
         dialog.showErrorBox(
-            'Privilegios insuficientes',
-            'All Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauración.\n\nPor favor, ejecuta la aplicación como administrador.'
+            'Insufficient privileges / Privilegios insuficientes',
+            'All Updater requires Administrator permissions to manage Winget and create restore points.\n\nAll Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion.'
         );
         app.quit();
         return;
     }
+
+    const { setupIPC } = await import('../src/main/ipc.js');
+    setupIPC();
 
     createWindow();
 });

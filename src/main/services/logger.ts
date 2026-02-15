@@ -3,7 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 
 // Set precise log location
-const projectLogPath = path.join(app.getPath('documents'), 'Antigravity_Projects', 'All_updater', 'app_debug.log');
+const projectLogPath = path.join(app.getPath('userData'), 'app_debug.log');
 log.transports.file.resolvePathFn = () => projectLogPath;
 log.initialize();
 
@@ -13,15 +13,15 @@ export class LoggerService {
         log.info(`Logs are being written to: ${projectLogPath}`);
     }
 
-    info(message: string, ...args: any[]) {
+    info(message: string, ...args: unknown[]) {
         log.info(message, ...args);
     }
 
-    error(message: string, ...args: any[]) {
+    error(message: string, ...args: unknown[]) {
         log.error(message, ...args);
     }
 
-    warn(message: string, ...args: any[]) {
+    warn(message: string, ...args: unknown[]) {
         log.warn(message, ...args);
     }
 

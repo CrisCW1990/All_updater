@@ -12,6 +12,53 @@ const restoreService = new SystemRestoreService();
 const settingsService = new SettingsService();
 const logger = new LoggerService();
 const systemService = new SystemService();
+const settingKeys = [
+    'theme',
+    'language',
+    'dontShowRestoreWarning',
+    'fontSize',
+    'hasSeenOnboarding'
+];
+function isSettingsKey(key) {
+    return settingKeys.includes(key);
+}
+function setSettingSafely(key, value) {
+    switch (key) {
+        case 'theme':
+            if (value === 'dark' || value === 'light' || value === 'system') {
+                settingsService.set('theme', value);
+                return;
+            }
+            break;
+        case 'language':
+            if (value === 'en' || value === 'es') {
+                settingsService.set('language', value);
+                return;
+            }
+            break;
+        case 'fontSize':
+            if (value === 'small' || value === 'medium' || value === 'large') {
+                settingsService.set('fontSize', value);
+                return;
+            }
+            break;
+        case 'dontShowRestoreWarning':
+            if (typeof value === 'boolean') {
+                settingsService.set('dontShowRestoreWarning', value);
+                return;
+            }
+            break;
+        case 'hasSeenOnboarding':
+            if (typeof value === 'boolean') {
+                settingsService.set('hasSeenOnboarding', value);
+                return;
+            }
+            break;
+        default:
+            break;
+    }
+    throw new Error(`Invalid value for setting ${key}`);
+}
 export function setupIPC() {
     console.log('[IPC] Setting up IPC handlers...');
     // Winget
@@ -27,18 +74,24 @@ export function setupIPC() {
             event.sender.send('winget:log', logLine);
         });
     });
-    ipcMain.handle('winget:install-all', async () => {
-        logger.info('Installing all updates');
-        return await wingetService.installAll();
-    });
     // System Restore
     ipcMain.handle('system:create-restore-point', async (_, description) => {
         logger.info(`Creating restore point: ${description}`);
         return await restoreService.createRestorePoint(description);
     });
     // Settings
-    ipcMain.handle('settings:get', (_, key) => settingsService.get(key));
-    ipcMain.handle('settings:set', (_, key, value) => settingsService.set(key, value));
+    ipcMain.handle('settings:get', (_, key) => {
+        if (!isSettingsKey(key)) {
+            throw new Error(`Invalid settings key: ${key}`);
+        }
+        return settingsService.get(key);
+    });
+    ipcMain.handle('settings:set', (_, key, value) => {
+        if (!isSettingsKey(key)) {
+            throw new Error(`Invalid settings key: ${key}`);
+        }
+        setSettingSafely(key, value);
+    });
     // Logs
     ipcMain.handle('system:open-logs', async () => {
         try {
@@ -66,11 +119,18 @@ export function setupIPC() {
     ipcMain.handle('system:get-userdata-path', async () => {
         return (await import('electron')).app.getPath('userData');
     });
+    ipcMain.handle('system:open-url', async (_, url) => {
+        if (!/^https?:\/\//i.test(url)) {
+            throw new Error('Invalid URL protocol');
+        }
+        await shell.openExternal(url);
+    });
     // History
     ipcMain.handle('history:get', async () => historyService.getHistory());
     ipcMain.handle('history:add', async (_, entry) => historyService.addEntry(entry));
     ipcMain.handle('history:clear', async () => {
         historyService.clearHistory();
+        settingsService.set('language', 'en');
         settingsService.set('hasSeenOnboarding', false);
     });
     // Logger Pass-through

@@ -2,22 +2,83 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 console.log('[Preload] Script loaded');
 
+type RendererListener = Parameters<typeof ipcRenderer.on>[1];
+const listenerMap = new Map<string, Map<RendererListener, RendererListener>>();
+const allowedInvokeChannels = new Set([
+    'winget:check-updates',
+    'winget:install-update',
+    'system:create-restore-point',
+    'system:open-logs',
+    'system:is-elevated',
+    'system:get-info',
+    'settings:get',
+    'settings:set',
+    'system:set-operation-active',
+    'system:open-url',
+    'history:get',
+    'history:add',
+    'history:clear',
+    'system:get-userdata-path'
+]);
+const allowedOnChannels = new Set([
+    'winget:log',
+    'main-process-message'
+]);
+const allowedSendChannels = new Set([
+    'log:info',
+    'log:error'
+]);
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
     on(...args: Parameters<typeof ipcRenderer.on>) {
         const [channel, listener] = args
-        return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
+        if (!allowedOnChannels.has(channel)) {
+            throw new Error(`IPC channel not allowed for on(): ${channel}`);
+        }
+        let channelListeners = listenerMap.get(channel);
+        if (!channelListeners) {
+            channelListeners = new Map();
+            listenerMap.set(channel, channelListeners);
+        }
+
+        const existing = channelListeners.get(listener);
+        if (existing) {
+            ipcRenderer.off(channel, existing);
+        }
+
+        const wrapped: RendererListener = (event, ...eventArgs) => listener(event, ...eventArgs);
+        channelListeners.set(listener, wrapped);
+        return ipcRenderer.on(channel, wrapped)
     },
     off(...args: Parameters<typeof ipcRenderer.off>) {
         const [channel, listener] = args
+        if (!allowedOnChannels.has(channel)) {
+            throw new Error(`IPC channel not allowed for off(): ${channel}`);
+        }
+        const channelListeners = listenerMap.get(channel);
+        const wrapped = channelListeners?.get(listener as RendererListener);
+        if (wrapped) {
+            channelListeners?.delete(listener as RendererListener);
+            if (channelListeners && channelListeners.size === 0) {
+                listenerMap.delete(channel);
+            }
+            return ipcRenderer.off(channel, wrapped);
+        }
         return ipcRenderer.off(channel, listener)
     },
     send(...args: Parameters<typeof ipcRenderer.send>) {
         const [channel, ...omit] = args
+        if (!allowedSendChannels.has(channel)) {
+            throw new Error(`IPC channel not allowed for send(): ${channel}`);
+        }
         return ipcRenderer.send(channel, ...omit)
     },
     invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
         const [channel, ...omit] = args
+        if (!allowedInvokeChannels.has(channel)) {
+            throw new Error(`IPC channel not allowed for invoke(): ${channel}`);
+        }
         console.log('[Preload] IPC invoke called:', channel);
         return ipcRenderer.invoke(channel, ...omit)
     },

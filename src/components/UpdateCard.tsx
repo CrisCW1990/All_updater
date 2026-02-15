@@ -28,7 +28,7 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                     ? "cursor-default border-amber-300 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-900/10"
                     : isSelected
                         ? "cursor-pointer border-blue-500 bg-blue-50/50 dark:border-blue-500/50 dark:bg-blue-900/10"
-                        : "cursor-pointer border-gray-300 bg-white hover:border-blue-500 dark:border-white/5 dark:bg-black/20 dark:hover:border-white/10 dark:hover:bg-black/30"
+                        : "cursor-pointer border-slate-300 bg-white hover:border-blue-500 hover:bg-slate-50 dark:border-white/5 dark:bg-black/20 dark:hover:border-white/10 dark:hover:bg-black/30"
             )}
         >
             <div className="flex items-center gap-4">
@@ -48,12 +48,12 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-black dark:text-gray-100">{update.name}</h3>
                         {/* Source badge */}
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-600 dark:bg-white/10 dark:text-gray-400">
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:bg-white/10 dark:text-gray-400">
                             {update.source || 'winget'}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-400">
                         <span className="font-mono text-xs font-bold">{update.id}</span>
                     </div>
 
@@ -64,8 +64,8 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                     ) : (
                         <div className="mt-3 flex items-center gap-4 text-sm">
                             <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-600 dark:text-slate-500">{t('current')}</span>
-                                <span className={clsx("font-bold text-sm", isUnknown ? "text-amber-700" : "text-black dark:text-gray-300")}>
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-500">{t('current')}</span>
+                                <span className={clsx("font-bold text-sm", isUnknown ? "text-amber-800" : "text-black dark:text-gray-300")}>
                                     {isUnknown ? (
                                         <span className="flex items-center gap-1">
                                             <AlertCircle className="h-3 w-3" /> {t('unknown')}
@@ -73,9 +73,9 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                                     ) : update.version}
                                 </span>
                             </div>
-                            <ArrowRight className="h-4 w-4 text-gray-400" />
+                            <ArrowRight className="h-4 w-4 text-slate-500" />
                             <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-600 dark:text-slate-500">{t('new')}</span>
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-500">{t('new')}</span>
                                 <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{update.available}</span>
                             </div>
                         </div>

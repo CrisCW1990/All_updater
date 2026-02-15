@@ -1,6 +1,6 @@
 import Store from 'electron-store';
 
-interface UserSettings {
+export interface UserSettings {
     theme: 'dark' | 'light' | 'system';
     language: 'en' | 'es';
     dontShowRestoreWarning: boolean;

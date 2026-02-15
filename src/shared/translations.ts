@@ -19,8 +19,9 @@ export const translations = {
         readyTitle: "Ready when you are!",
         readyDesc: "Hit the button to scour the depths of your PC for outdated software.",
         checkUpdates: "Check for Updates",
+        checkFailedTryAgain: "Could not read Winget output. Please try again.",
         footerLove: "Crafted with love by",
-        footerAI: "AI included (mostly to judge your outdated software).",
+        footerAI: "Partially created with AI (mostly to judge your outdated software).",
 
         // Dashboard States
         allClean: "All systems go!",
@@ -43,6 +44,8 @@ export const translations = {
         updateSuccess: "Successfully updated",
         updateFailed: "Failed to update",
         updateSkipped: "skipped: No applicable update found",
+        updateSecuritySkipped: "skipped: Security verification failed",
+        updateInUseSkipped: "skipped: Application was in use",
         updateInapplicable: "Not needed right now",
         updateInapplicableDesc: "The installer indicated this version is not applicable to your device.",
         updateManualUninstall: "Manual uninstall required (different technology)",
@@ -100,7 +103,7 @@ export const translations = {
         // History Actions
         resetApp: "Reset App",
         resetAppConfirm: "Reset Application?",
-        resetAppMessage: "This will wipe history and reset your settings (language, welcome screen). No going back.",
+        resetAppMessage: "This will wipe history, reset language to English, and show onboarding again. No going back.",
         confirm: "Confirm",
         cancel: "Cancel",
 
@@ -135,8 +138,9 @@ export const translations = {
         readyTitle: "¡Listos cuando tú quieras!",
         readyDesc: "Pulsa el botón para escudriñar las profundidades de tu PC en busca de software obsoleto.",
         checkUpdates: "Buscar Actualizaciones",
+        checkFailedTryAgain: "No se pudo leer la salida de Winget. Intenta de nuevo.",
         footerLove: "Hecho con amor por",
-        footerAI: "IA incluida (principalmente para juzgar tus apps viejas).",
+        footerAI: "Parcialmente creado con IA (principalmente para juzgar tus apps viejas).",
 
         // Dashboard States
         allClean: "¡Todo en orden!",
@@ -159,6 +163,8 @@ export const translations = {
         updateSuccess: "Actualizado con éxito:",
         updateFailed: "Error al actualizar:",
         updateSkipped: "omitido: No se encontró actualización aplicable",
+        updateSecuritySkipped: "omitido: Falló la verificación de seguridad",
+        updateInUseSkipped: "omitido: La aplicación estaba en uso",
         updateInapplicable: "Por ahora no necesitas esta versión",
         updateInapplicableDesc: "El instalador ha determinado que esta actualización no aplica a tu sistema actual.",
         updateManualUninstall: "Requiere desinstalación manual (tecnología diferente)",
@@ -216,12 +222,12 @@ export const translations = {
         // History Actions
         resetApp: "Restablecer App",
         resetAppConfirm: "¿Restablecer Aplicación?",
-        resetAppMessage: "Esto borrará el historial y restablecerá la configuración (idioma, bienvenida). No hay vuelta atrás.",
+        resetAppMessage: "Esto borrará el historial, reiniciará el idioma a Inglés y volverá a mostrar la bienvenida. No hay vuelta atrás.",
         confirm: "Confirmar",
         cancel: "Cancelar",
 
         // New UI Elements
-        scanningBody: "Escanenando las profundidades de tu PC...",
+        scanningBody: "Escaneando las profundidades de tu PC...",
         dataTransparencyTitle: "Transparencia de Datos",
         dataTransparency: "Somos claros y no invasivos. Tus opciones e historial se guardan localmente en:",
 

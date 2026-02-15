@@ -17,6 +17,8 @@ interface ToastItem {
   type: ToastType;
 }
 
+type ThemeMode = 'dark' | 'light' | 'system';
+
 export default function App() {
   const { t } = useLanguage();
   const [updates, setUpdates] = useState<AppUpdate[]>([]);
@@ -37,11 +39,27 @@ export default function App() {
   const [batchResults, setBatchResults] = useState<HistoryItem[]>([]);
   const [systemInfo, setSystemInfo] = useState<{ arch: string, locale: string } | null>(null);
   const [isWingetMissing, setIsWingetMissing] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [darkMode, setDarkMode] = useState(true);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
+  const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
+  const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    return String(error);
+  };
+
+  const resolveDarkMode = (mode: ThemeMode): boolean => {
+    if (mode === 'dark') return true;
+    if (mode === 'light') return false;
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
+  };
 
   useEffect(() => {
-    const handleLog = (_: any, log: string) => {
+    const handleLog = (_event: unknown, log: string) => {
       const cleanLog = log.replace(/\[#+ -+\]/g, '').trim();
       if (cleanLog) setCurrentLogLine(cleanLog);
     };
@@ -51,28 +69,58 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadSettings();
-    loadSystemInfo();
+    const initializeApp = async () => {
+      try {
+        const info = await window.ipcRenderer.invoke('system:get-info');
+        setSystemInfo(info);
+      } catch (error) {
+        console.error('[App] Failed to load system info:', error);
+      }
+
+      try {
+        const theme = await window.ipcRenderer.invoke('settings:get', 'theme');
+        const normalizedTheme: ThemeMode = theme === 'dark' || theme === 'light' || theme === 'system' ? theme : 'system';
+        setThemeMode(normalizedTheme);
+        setDarkMode(resolveDarkMode(normalizedTheme));
+      } catch (error) {
+        console.error('[App] Failed to load theme settings:', error);
+        setThemeMode('system');
+        setDarkMode(resolveDarkMode('system'));
+      }
+
+      try {
+        const hasSeenOnboarding = await window.ipcRenderer.invoke('settings:get', 'hasSeenOnboarding');
+        if (!hasSeenOnboarding) setShowOnboarding(true);
+      } catch (error) {
+        console.error('[App] Failed to load onboarding settings:', error);
+        setShowOnboarding(true);
+      }
+    };
+
+    void initializeApp();
   }, []);
 
-  const loadSystemInfo = async () => {
-    const info = await window.ipcRenderer.invoke('system:get-info');
-    setSystemInfo(info);
-  };
+  useEffect(() => {
+    if (themeMode !== 'system' || typeof window.matchMedia !== 'function') return;
 
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => setDarkMode(mediaQuery.matches);
+    handleChange();
 
-  const loadSettings = async () => {
-    const theme = await window.ipcRenderer.invoke('settings:get', 'theme');
-    if (theme) setDarkMode(theme === 'dark');
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
 
-    const hasSeenOnboarding = await window.ipcRenderer.invoke('settings:get', 'hasSeenOnboarding');
-    if (!hasSeenOnboarding) setShowOnboarding(true);
-  };
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, [themeMode]);
 
   const toggleTheme = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    window.ipcRenderer.invoke('settings:set', 'theme', newMode ? 'dark' : 'light');
+    const nextMode: ThemeMode = darkMode ? 'light' : 'dark';
+    setThemeMode(nextMode);
+    setDarkMode(nextMode === 'dark');
+    window.ipcRenderer.invoke('settings:set', 'theme', nextMode);
   };
 
   const handleOnboardingClose = (dontShowAgain: boolean) => {
@@ -102,16 +150,25 @@ export default function App() {
       const [available] = await Promise.all([fetchUpdates, minLoadTime]);
       setUpdates(available);
       // Only auto-select updates that are NOT inapplicable
-      const installable = available.filter((u: any) => u.previousStatus !== 'inapplicable');
-      setSelectedIds(new Set(installable.map((u: any) => u.id)));
+      const installable = available.filter((u) => u.previousStatus !== 'inapplicable');
+      setSelectedIds(new Set(installable.map((u) => u.id)));
       setHasChecked(true);
       setIsWingetMissing(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
       console.error("[App] Failed to check updates:", error);
-      if (error.message?.includes('ENOENT') || error.message?.includes('not found')) {
+      if (
+        errorMessage.includes('WingetNotFound') ||
+        errorMessage.includes('ENOENT') ||
+        errorMessage.includes('not found') ||
+        errorMessage.includes('not recognized')
+      ) {
         setIsWingetMissing(true);
+        setHasChecked(true);
+      } else {
+        addToast(t('checkFailedTryAgain'), 'error');
+        setHasChecked(false);
       }
-      setHasChecked(true);
     } finally {
       setLoading(false);
     }
@@ -128,9 +185,6 @@ export default function App() {
   };
 
   const toggleSelectAll = () => {
-    // Filter out inapplicable updates from being selectable
-    const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
-
     if (selectedIds.size === selectableUpdates.length) {
       setSelectedIds(new Set());
     } else {
@@ -147,143 +201,156 @@ export default function App() {
     setShowRestoreModal(false);
     setIsInstalling(true);
     setBatchResults([]);
-    await window.ipcRenderer.invoke('system:set-operation-active', true);
+    let operationMarked = false;
+    try {
+      await window.ipcRenderer.invoke('system:set-operation-active', true);
+      operationMarked = true;
 
-    if (createRestore) {
-      setIsCreatingRestore(true);
-      setCurrentLogLine(t('creatingRestore'));
-      try {
-        const success = (await window.ipcRenderer.invoke('system:create-restore-point', "All Updater Auto-Restore")) as unknown as boolean;
-        if (!success) {
-          throw new Error("System Restore failed");
+      if (createRestore) {
+        setIsCreatingRestore(true);
+        setCurrentLogLine(t('creatingRestore'));
+        try {
+          const success = (await window.ipcRenderer.invoke('system:create-restore-point', "All Updater Auto-Restore")) as unknown as boolean;
+          if (!success) {
+            throw new Error("System Restore failed");
+          }
+        } catch (e) {
+          console.error("Failed to create restore point", e);
+          addToast(t('restoreFailedAbort'), "error");
+          setCurrentLogLine(null);
+          return; // ABORT updates
+        } finally {
+          setIsCreatingRestore(false);
         }
-      } catch (e) {
-        console.error("Failed to create restore point", e);
-        addToast(t('restoreFailedAbort'), "error");
-        setIsCreatingRestore(false); // Reset state
-        setCurrentLogLine(null);
-        return; // ABORT updates
-      } finally {
-        setIsCreatingRestore(false);
       }
-    }
 
-    const total = selectedIds.size;
-    let current = 0;
-    const currentResults: HistoryItem[] = [];
-    setInstallProgress({ current, total });
+      const total = selectedIds.size;
+      let current = 0;
+      const currentResults: HistoryItem[] = [];
+      setInstallProgress({ current, total });
 
-    const queue = Array.from(selectedIds);
+      const queue = Array.from(selectedIds);
 
-    // Iteration using while to allow "retry" without complex index math
-    let i = 0;
-    while (i < queue.length) {
-      const id = queue[i];
-      const update = updates.find(u => u.id === id);
-      const appName = update?.name || id;
-      const appVersion = update?.available || 'unknown';
+      // Iteration using while to allow "retry" without complex index math
+      let i = 0;
+      while (i < queue.length) {
+        const id = queue[i];
+        const update = updates.find(u => u.id === id);
+        const appName = update?.name || id;
+        const appVersion = update?.available || 'unknown';
 
-      try {
-        setCurrentInstallingApp(appName);
+        try {
+          setCurrentInstallingApp(appName);
 
-        // Wait for conflict resolution if needed
-        let retry = true;
-        while (retry) {
-          try {
-            retry = false;
-            await window.ipcRenderer.invoke('winget:install-update', id);
-          } catch (e: any) {
-            // Check specifically for AppInUse
-            if (e.message?.includes('AppInUse')) {
-              // Show Conflict Modal and wait for user decision
-              const userDecision = await new Promise<'retry' | 'skip'>((resolve) => {
-                setConflictState({
-                  appName,
-                  onRetry: () => resolve('retry'),
-                  onSkip: () => resolve('skip')
+          // Wait for conflict resolution if needed
+          let retry = true;
+          while (retry) {
+            try {
+              retry = false;
+              await window.ipcRenderer.invoke('winget:install-update', id);
+            } catch (e: unknown) {
+              const errorMessage = getErrorMessage(e);
+              // Check specifically for AppInUse
+              if (errorMessage.includes('AppInUse')) {
+                // Show Conflict Modal and wait for user decision
+                const userDecision = await new Promise<'retry' | 'skip'>((resolve) => {
+                  setConflictState({
+                    appName,
+                    onRetry: () => resolve('retry'),
+                    onSkip: () => resolve('skip')
+                  });
                 });
-              });
 
-              setConflictState(null); // Close modal
+                setConflictState(null); // Close modal
 
-              if (userDecision === 'retry') {
-                retry = true;
-                continue; // Loop internal while
-              } else {
-                // Skip
-                throw e; // Re-throw to hit catch block as failed/skipped
+                if (userDecision === 'retry') {
+                  retry = true;
+                  continue; // Loop internal while
+                } else {
+                  // Skip
+                  throw e; // Re-throw to hit catch block as failed/skipped
+                }
               }
+              throw e; // Throw other errors
             }
-            throw e; // Throw other errors
+          }
+
+          const historyEntry: Omit<HistoryItem, 'date'> = {
+            id,
+            appName,
+            version: appVersion, // This is the new version
+            previousVersion: update?.version, // This is the old version
+            status: 'success'
+          };
+          await window.ipcRenderer.invoke('history:add', historyEntry);
+          currentResults.push({ ...historyEntry, date: new Date().toISOString() });
+
+          addToast(`${t('updateSuccess')} ${appName}`, 'success');
+
+          setUpdates(prev => prev.filter(u => u.id !== id));
+          setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        } catch (e: unknown) {
+          const errorMessage = getErrorMessage(e);
+          console.error(`Failed to update ${id}`, e);
+          const isInapplicable = errorMessage.includes('Inapplicable');
+          const isReboot = errorMessage.includes('RebootRequired');
+          const isInUse = errorMessage.includes('AppInUse');
+          const isSecurity = errorMessage.includes('HashMismatch');
+
+          let status: 'failed' | 'inapplicable' | 'reboot' | 'in-use' | 'security-error' = 'failed';
+          if (isInapplicable) status = 'inapplicable';
+          if (isReboot) status = 'reboot';
+          if (isInUse) status = 'in-use'; // Only if skipped
+          if (isSecurity) status = 'security-error';
+
+          const historyEntry: Omit<HistoryItem, 'date'> = {
+            id,
+            appName,
+            version: appVersion,
+            previousVersion: update?.version,
+            status,
+            details: errorMessage
+          };
+          await window.ipcRenderer.invoke('history:add', historyEntry);
+          currentResults.push({ ...historyEntry, date: new Date().toISOString() });
+
+          if (isInapplicable) {
+            addToast(`${appName}: ${t('updateSkipped')}`, 'warning');
+          } else if (isSecurity) {
+            addToast(`${appName}: ${t('updateSecuritySkipped')}`, 'error');
+          } else if (isInUse) {
+            addToast(`${appName}: ${t('updateInUseSkipped')}`, 'warning');
+          } else {
+            addToast(`${t('updateFailed')} ${appName}`, 'error');
           }
         }
+        current++;
+        setInstallProgress({ current, total });
+        i++;
+      }
 
-        const historyEntry: Omit<HistoryItem, 'date'> = {
-          id,
-          appName,
-          version: appVersion, // This is the new version
-          previousVersion: update?.version, // This is the old version
-          status: 'success'
-        };
-        await window.ipcRenderer.invoke('history:add', historyEntry);
-        currentResults.push({ ...historyEntry, date: new Date().toISOString() });
-
-        addToast(`${t('updateSuccess')} ${appName}`, 'success');
-
-        setUpdates(prev => prev.filter(u => u.id !== id));
-        setSelectedIds(prev => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      } catch (e: any) {
-        console.error(`Failed to update ${id}`, e);
-        const isInapplicable = e.message?.includes('Inapplicable');
-        const isReboot = e.message?.includes('RebootRequired');
-        const isInUse = e.message?.includes('AppInUse');
-        const isSecurity = e.message?.includes('HashMismatch');
-
-        let status: 'failed' | 'inapplicable' | 'reboot' | 'in-use' | 'security-error' = 'failed';
-        if (isInapplicable) status = 'inapplicable';
-        if (isReboot) status = 'reboot';
-        if (isInUse) status = 'in-use'; // Only if skipped
-        if (isSecurity) status = 'security-error';
-
-        const historyEntry: Omit<HistoryItem, 'date'> = {
-          id,
-          appName,
-          version: appVersion,
-          previousVersion: update?.version,
-          status,
-          details: e.message
-        };
-        await window.ipcRenderer.invoke('history:add', historyEntry);
-        currentResults.push({ ...historyEntry, date: new Date().toISOString() });
-
-        if (isInapplicable) {
-          addToast(`${appName} skipped: No applicable update found`, 'warning');
-        } else if (isSecurity) {
-          addToast(`${appName} skipped: Security Verification Failed`, 'error');
-        } else if (isInUse) {
-          addToast(`${appName} skipped: Application was in use`, 'warning');
-        } else {
-          addToast(`Failed to update ${appName}`, 'error');
+      setBatchResults(currentResults);
+      if (currentResults.length > 0) {
+        setShowSummary(true);
+      }
+    } finally {
+      setIsInstalling(false);
+      setIsCreatingRestore(false);
+      setInstallProgress(null);
+      setCurrentInstallingApp(null);
+      setCurrentLogLine(null);
+      setConflictState(null);
+      if (operationMarked) {
+        try {
+          await window.ipcRenderer.invoke('system:set-operation-active', false);
+        } catch (cleanupError) {
+          console.error('Failed to reset operation state', cleanupError);
         }
       }
-      current++;
-      setInstallProgress({ current, total });
-      i++;
-    }
-
-    setBatchResults(currentResults);
-    setIsInstalling(false);
-    setInstallProgress(null);
-    setCurrentInstallingApp(null);
-    setCurrentLogLine(null);
-    await window.ipcRenderer.invoke('system:set-operation-active', false);
-
-    if (currentResults.length > 0) {
-      setShowSummary(true);
     }
   };
 
@@ -300,7 +367,7 @@ export default function App() {
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('dashboard')}</h2>
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-gray-900 dark:text-slate-400">{t('manageApps')}</p>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-400">{t('manageApps')}</p>
                 {systemInfo && (
                   <span className="flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
                     {systemInfo.arch} • {systemInfo.locale}
@@ -350,11 +417,11 @@ export default function App() {
               </div>
               <div className="max-w-md space-y-2">
                 <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{t('wingetMissing')}</h3>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-700 dark:text-slate-400">
                   {t('wingetMissingDesc')}
                 </p>
                 <button
-                  onClick={() => window.ipcRenderer.invoke('settings:set', 'open-url', 'https://aka.ms/getwinget')}
+                  onClick={() => window.ipcRenderer.invoke('system:open-url', 'https://aka.ms/getwinget')}
                   className="mt-4 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                 >
                   {t('getWinget')}
@@ -389,7 +456,7 @@ export default function App() {
               </div>
               <div className="max-w-md space-y-2">
                 <h3 className="text-2xl font-bold text-black dark:text-white">{t('readyTitle')}</h3>
-                <p className="text-gray-900 dark:text-slate-400 font-medium">{t('readyDesc')}</p>
+              <p className="font-medium text-slate-700 dark:text-slate-400">{t('readyDesc')}</p>
               </div>
               <button
                 onClick={checkUpdates}
@@ -398,7 +465,7 @@ export default function App() {
                 <RefreshCw className="h-6 w-6 transition-transform group-hover:rotate-180" />
                 {t('checkUpdates')}
               </button>
-              <p className="text-xl sm:text-2xl mt-8 font-bold text-slate-600 dark:text-slate-400 animate-in fade-in slide-in-from-top-2 duration-700 delay-300 max-w-2xl px-4 leading-relaxed">
+              <p className="text-xl sm:text-2xl mt-8 font-bold text-slate-700 dark:text-slate-400 animate-in fade-in slide-in-from-top-2 duration-700 delay-300 max-w-2xl px-4 leading-relaxed">
                 {t('footerLove')} <span className="text-blue-600 dark:text-blue-400">Samuel</span>.
                 <br />
                 {t('footerAI')}
@@ -416,7 +483,7 @@ export default function App() {
                 <CheckCircle className="relative h-24 w-24 text-emerald-600 dark:text-emerald-500" strokeWidth={1} />
               </div>
               <h3 className="text-2xl font-bold text-black dark:text-white">{t('allClean')}</h3>
-              <p className="text-gray-900 dark:text-slate-400 font-medium text-lg">{t('allCleanDesc')}</p>
+              <p className="font-medium text-slate-700 dark:text-slate-400 text-lg">{t('allCleanDesc')}</p>
               <button
                 onClick={checkUpdates}
                 className="mt-4 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
@@ -426,12 +493,12 @@ export default function App() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl border border-white/20 bg-white/40 px-4 py-3 backdrop-blur-md dark:bg-black/20">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 backdrop-blur-md dark:border-white/10 dark:bg-black/20">
                 <button
                   onClick={toggleSelectAll}
                   className="flex items-center gap-3 text-sm font-medium text-slate-700 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
                 >
-                  {selectedIds.size === updates.length ? (
+                  {allSelectableSelected ? (
                     <CheckSquare className="h-5 w-5 text-blue-500" />
                   ) : (
                     <Square className="h-5 w-5 text-slate-400" />
@@ -467,16 +534,16 @@ export default function App() {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{t('summaryTitle')}</h3>
-                <p className="text-slate-600 dark:text-slate-400">{t('summaryDesc')}</p>
+                <p className="text-slate-700 dark:text-slate-400">{t('summaryDesc')}</p>
               </div>
               <button
                 onClick={() => {
                   setShowSummary(false);
                   checkUpdates();
                 }}
-                className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                className="rounded-full p-2 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
               >
-                <XCircle className="h-6 w-6 text-slate-400" />
+                <XCircle className="h-6 w-6 text-slate-500" />
               </button>
             </div>
 
@@ -484,7 +551,9 @@ export default function App() {
               {/* Logic for summary message */}
               {(() => {
                 const total = batchResults.length;
-                const failed = batchResults.filter(r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use').length;
+                const failed = batchResults.filter(
+                  r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
+                ).length;
 
                 let message = t('summarySuccess');
 
@@ -495,7 +564,7 @@ export default function App() {
                 }
 
                 return (
-                  <div className="mb-4 rounded-2xl bg-slate-50 p-6 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                  <div className="mb-4 rounded-2xl border border-slate-300 bg-slate-100 p-6 dark:border-white/10 dark:bg-white/5">
                     <p className="text-xl text-slate-700 dark:text-slate-200 italic text-center font-medium leading-relaxed">
                       {message}
                     </p>
@@ -504,30 +573,35 @@ export default function App() {
               })()}
 
               {batchResults.map((res, i) => (
-                <div key={i} className="flex items-center gap-4 rounded-2xl bg-slate-100/50 p-4 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                <div key={i} className="flex items-center gap-4 rounded-2xl border border-slate-300 bg-slate-100 p-4 dark:border-white/5 dark:bg-white/5">
                   <div className={clsx(
                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm",
                     res.status === 'success' ? "bg-green-500 text-white" :
-                      res.status === 'inapplicable' ? "bg-amber-500 text-white" :
+                      res.status === 'reboot' ? "bg-blue-600 text-white" :
+                        res.status === 'in-use' ? "bg-amber-500 text-white" :
+                          res.status === 'inapplicable' ? "bg-amber-500 text-white" :
                         res.status === 'security-error' ? "bg-orange-600 text-white" :
                           "bg-red-500 text-white"
                   )}>
                     {res.status === 'success' && <CheckCircle className="h-5 w-5" />}
+                    {res.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
+                    {res.status === 'in-use' && <AlertTriangle className="h-5 w-5" />}
                     {res.status === 'inapplicable' && <AlertCircle className="h-5 w-5" />}
                     {res.status === 'security-error' && <AlertTriangle className="h-5 w-5" />}
                     {res.status === 'failed' && <XCircle className="h-5 w-5" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-slate-900 dark:text-white truncate">{res.appName}</h4>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">
+                    <p className="text-[10px] text-slate-700 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">
                       Version {res.version}
                     </p>
                     <p className="text-xs text-slate-700 dark:text-slate-400 italic font-medium">
                       {res.status === 'success' ? t('statusSuccess') :
-                        res.status === 'inapplicable' ? t('statusInapplicable') :
-                          res.status === 'reboot' ? t('statusReboot') :
-                            res.status === 'in-use' ? t('statusInUse') :
-                              t('statusFailed')}
+                        res.status === 'reboot' ? t('statusReboot') :
+                          res.status === 'in-use' ? t('statusInUse') :
+                            res.status === 'inapplicable' ? t('statusInapplicable') :
+                              res.status === 'security-error' ? t('statusSecurity') :
+                                t('statusFailed')}
                     </p>
                   </div>
                 </div>
@@ -548,11 +622,13 @@ export default function App() {
                 setShowSummary(false);
                 checkUpdates();
               }}
-              className="mt-8 w-full rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-50 hover:scale-[1.02] active:scale-[0.98]"
+              className="mt-8 w-full rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-700 dark:hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98]"
             >
               {(() => {
                 const total = batchResults.length;
-                const failed = batchResults.filter(r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use').length;
+                const failed = batchResults.filter(
+                  r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
+                ).length;
                 return failed === total ? t('thanksNothing') : t('closeSuccess');
               })()}
             </button>
@@ -588,7 +664,7 @@ export default function App() {
             </div>
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">{t('creatingRestore')}</h3>
-              <p className="text-slate-500 dark:text-slate-400 max-w-xs">
+              <p className="text-slate-600 dark:text-slate-400 max-w-xs">
                 {t('restoreWait')}
               </p>
             </div>
@@ -605,11 +681,11 @@ export default function App() {
             </div>
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">{t('installingUpdates')}</h3>
-              <p className="text-slate-500 dark:text-slate-400 max-w-xs font-medium">
+              <p className="text-slate-600 dark:text-slate-400 max-w-xs font-medium">
                 {t('updatingApp')} <span className="text-blue-600 dark:text-blue-400">{currentInstallingApp}</span>
               </p>
               {currentLogLine && (
-                <p className="text-[10px] text-blue-500/70 dark:text-blue-400/50 italic animate-pulse truncate max-w-[250px]">
+                <p className="text-[10px] text-blue-700/80 dark:text-blue-400/50 italic animate-pulse truncate max-w-[250px]">
                   {currentLogLine}
                 </p>
               )}

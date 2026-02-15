@@ -29,7 +29,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
     }, []);
 
     return (
-        <div className={clsx("flex h-screen w-full overflow-hidden transition-colors duration-300 font-sans selection:bg-blue-500/30", darkMode ? "dark bg-slate-950 text-white" : "bg-slate-50 text-slate-900")}>
+        <div className={clsx("flex h-screen w-full overflow-hidden transition-colors duration-300 font-sans selection:bg-blue-500/30", darkMode ? "dark bg-slate-950 text-white" : "bg-slate-50 text-slate-950")}>
 
             {/* Ambient Background */}
             <div className="fixed inset-0 z-0 pointer-events-none">
@@ -38,8 +38,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
             </div>
 
             {/* Sidebar */}
-            <aside className="relative z-20 flex w-64 flex-col border-r border-gray-300 bg-white/50 backdrop-blur-xl dark:border-white/5 dark:bg-black/20">
-                <div className="flex h-16 items-center gap-3 px-6 border-b border-gray-200/50 dark:border-white/5">
+            <aside className="relative z-20 flex w-64 flex-col border-r border-slate-300 bg-white/90 backdrop-blur-xl dark:border-white/5 dark:bg-black/20">
+                <div className="flex h-16 items-center gap-3 px-6 border-b border-slate-200 dark:border-white/5">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20 overflow-hidden">
                         <img src={logo} alt="Logo" className="h-full w-full object-cover" />
                     </div>
@@ -53,7 +53,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200",
                             activeTab === 'dashboard'
                                 ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:shadow-none"
-                                : "text-gray-900 hover:bg-gray-200/50 dark:text-slate-400 dark:hover:bg-white/5"
+                                : "text-slate-900 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-white/5"
                         )}
                     >
                         <LayoutDashboard className="h-4 w-4" />
@@ -66,7 +66,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200",
                             activeTab === 'history'
                                 ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:shadow-none"
-                                : "text-gray-900 hover:bg-gray-200/50 dark:text-slate-400 dark:hover:bg-white/5"
+                                : "text-slate-900 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-white/5"
                         )}
                     >
                         <History className="h-4 w-4" />
@@ -74,27 +74,27 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                     </button>
 
                     <div className="px-3 py-2">
-                        <div className="h-px w-full bg-gray-300 dark:bg-white/5" />
+                        <div className="h-px w-full bg-slate-300 dark:bg-white/5" />
                     </div>
 
                 </nav>
 
                 {/* Data Transparency Message */}
                 <div className="px-4 pb-4">
-                    <div className="rounded-xl bg-blue-100/50 p-3 text-xs dark:bg-blue-900/10 border border-blue-200 dark:border-blue-500/10 shadow-sm">
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs shadow-sm dark:border-blue-500/10 dark:bg-blue-900/10">
                         <p className="font-bold text-blue-900 dark:text-blue-300 mb-1">
                             {t('dataTransparencyTitle')}
                         </p>
-                        <p className="text-black dark:text-slate-400 leading-relaxed mb-2 font-medium">
+                        <p className="mb-2 font-medium leading-relaxed text-slate-800 dark:text-slate-400">
                             {t('dataTransparency')}
                         </p>
-                        <code className="block w-full break-all rounded bg-white px-2 py-1.5 font-mono text-[10px] text-gray-900 dark:bg-black/20 dark:text-slate-400 border border-blue-200/30 dark:border-transparent transition-colors">
+                        <code className="block w-full break-all rounded border border-blue-200 bg-white px-2 py-1.5 font-mono text-[10px] text-slate-800 transition-colors dark:border-transparent dark:bg-black/20 dark:text-slate-400">
                             {userDataPath || '...'}
                         </code>
                     </div>
                 </div>
 
-                <div className="p-4 space-y-2 border-t border-gray-200/50 dark:border-white/5">
+                <div className="space-y-2 border-t border-slate-200 p-4 dark:border-white/5">
                     {/* Idioma Selector */}
                     <div className="flex items-center justify-between rounded-lg p-2 text-sm font-bold text-black dark:text-slate-400">
                         <span className="flex items-center gap-2">
@@ -104,13 +104,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                         <div className="flex gap-1">
                             <button
                                 onClick={() => setLanguage('en')}
-                                className={clsx("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold transition-all shadow-sm", language === 'en' ? "bg-blue-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-600 hover:bg-slate-300")}
+                                className={clsx("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold transition-all shadow-sm", language === 'en' ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700")}
                             >
                                 EN
                             </button>
                             <button
                                 onClick={() => setLanguage('es')}
-                                className={clsx("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold transition-all shadow-sm", language === 'es' ? "bg-blue-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-600 hover:bg-slate-300")}
+                                className={clsx("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold transition-all shadow-sm", language === 'es' ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700")}
                             >
                                 ES
                             </button>

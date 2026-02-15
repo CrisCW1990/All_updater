@@ -4,12 +4,16 @@ export class SystemRestoreService {
         try {
             const timestamp = new Date().toLocaleString();
             const fullDescription = `${description} (${timestamp})`;
+            const escapedDescription = fullDescription.replace(/'/g, "''");
+            const command = `Checkpoint-Computer -Description '${escapedDescription}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop`;
             // Use simpler command, but try to catch errors. 
             // Checkpoint-Computer requires admin. If it fails, it usually throws.
             // We adding -ErrorAction Stop to be sure.
             const result = await execa('powershell', [
+                '-NoProfile',
+                '-NonInteractive',
                 '-Command',
-                `Checkpoint-Computer -Description "${fullDescription}" -RestorePointType "MODIFY_SETTINGS" -ErrorAction Stop`
+                command
             ]);
             // Log output for debugging
             if (result.stdout)

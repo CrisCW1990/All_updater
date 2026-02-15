@@ -2,7 +2,7 @@ import log from 'electron-log/main';
 import path from 'path';
 import { app } from 'electron';
 // Set precise log location
-const projectLogPath = path.join(app.getPath('documents'), 'Antigravity_Projects', 'All_updater', 'app_debug.log');
+const projectLogPath = path.join(app.getPath('userData'), 'app_debug.log');
 log.transports.file.resolvePathFn = () => projectLogPath;
 log.initialize();
 export class LoggerService {

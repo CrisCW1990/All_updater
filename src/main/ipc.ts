@@ -1,10 +1,11 @@
 import { ipcMain, shell } from 'electron';
 import { WingetService } from './services/winget.js';
 import { SystemRestoreService } from './services/restore.js';
-import { SettingsService } from './services/settings.js';
+import { SettingsService, type UserSettings } from './services/settings.js';
 import { LoggerService } from './services/logger.js';
 import { SystemService } from './services/system.js';
 import { HistoryService } from './services/history.js';
+import type { HistoryItem } from '../shared/types.js';
 import log from 'electron-log/main'; // Import directly to access transport
 
 const historyService = new HistoryService();
@@ -13,6 +14,57 @@ const restoreService = new SystemRestoreService();
 const settingsService = new SettingsService();
 const logger = new LoggerService();
 const systemService = new SystemService();
+
+const settingKeys: readonly (keyof UserSettings)[] = [
+    'theme',
+    'language',
+    'dontShowRestoreWarning',
+    'fontSize',
+    'hasSeenOnboarding'
+];
+
+function isSettingsKey(key: string): key is keyof UserSettings {
+    return settingKeys.includes(key as keyof UserSettings);
+}
+
+function setSettingSafely(key: keyof UserSettings, value: unknown): void {
+    switch (key) {
+        case 'theme':
+            if (value === 'dark' || value === 'light' || value === 'system') {
+                settingsService.set('theme', value);
+                return;
+            }
+            break;
+        case 'language':
+            if (value === 'en' || value === 'es') {
+                settingsService.set('language', value);
+                return;
+            }
+            break;
+        case 'fontSize':
+            if (value === 'small' || value === 'medium' || value === 'large') {
+                settingsService.set('fontSize', value);
+                return;
+            }
+            break;
+        case 'dontShowRestoreWarning':
+            if (typeof value === 'boolean') {
+                settingsService.set('dontShowRestoreWarning', value);
+                return;
+            }
+            break;
+        case 'hasSeenOnboarding':
+            if (typeof value === 'boolean') {
+                settingsService.set('hasSeenOnboarding', value);
+                return;
+            }
+            break;
+        default:
+            break;
+    }
+
+    throw new Error(`Invalid value for setting ${key}`);
+}
 
 export function setupIPC() {
     console.log('[IPC] Setting up IPC handlers...');
@@ -33,11 +85,6 @@ export function setupIPC() {
         });
     });
 
-    ipcMain.handle('winget:install-all', async () => {
-        logger.info('Installing all updates');
-        return await wingetService.installAll();
-    });
-
     // System Restore
     ipcMain.handle('system:create-restore-point', async (_, description: string) => {
         logger.info(`Creating restore point: ${description}`);
@@ -45,8 +92,18 @@ export function setupIPC() {
     });
 
     // Settings
-    ipcMain.handle('settings:get', (_, key: string) => settingsService.get(key as any));
-    ipcMain.handle('settings:set', (_, key: string, value: any) => settingsService.set(key as any, value));
+    ipcMain.handle('settings:get', (_, key: string) => {
+        if (!isSettingsKey(key)) {
+            throw new Error(`Invalid settings key: ${key}`);
+        }
+        return settingsService.get(key);
+    });
+    ipcMain.handle('settings:set', (_, key: string, value: unknown) => {
+        if (!isSettingsKey(key)) {
+            throw new Error(`Invalid settings key: ${key}`);
+        }
+        setSettingSafely(key, value);
+    });
 
     // Logs
     ipcMain.handle('system:open-logs', async () => {
@@ -78,11 +135,19 @@ export function setupIPC() {
         return (await import('electron')).app.getPath('userData');
     });
 
+    ipcMain.handle('system:open-url', async (_, url: string) => {
+        if (!/^https?:\/\//i.test(url)) {
+            throw new Error('Invalid URL protocol');
+        }
+        await shell.openExternal(url);
+    });
+
     // History
     ipcMain.handle('history:get', async () => historyService.getHistory());
-    ipcMain.handle('history:add', async (_, entry: any) => historyService.addEntry(entry));
+    ipcMain.handle('history:add', async (_, entry: Omit<HistoryItem, 'date'>) => historyService.addEntry(entry));
     ipcMain.handle('history:clear', async () => {
         historyService.clearHistory();
+        settingsService.set('language', 'en');
         settingsService.set('hasSeenOnboarding', false);
     });
 

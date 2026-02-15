@@ -1,27 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import type { HistoryItem } from '../shared/types';
 import { clsx } from 'clsx';
-import { Clock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 export const HistoryView: React.FC = () => {
-    const { t } = useLanguage();
+    const { t, setLanguage } = useLanguage();
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
 
     useEffect(() => {
         const loadHistory = async () => {
-            const data = await window.ipcRenderer.invoke('history:get');
-            setHistory(data);
-            setLoading(false);
+            try {
+                const data = await window.ipcRenderer.invoke('history:get');
+                setHistory(data);
+            } catch (error) {
+                console.error('[HistoryView] Failed to load history:', error);
+                setHistory([]);
+            } finally {
+                setLoading(false);
+            }
         };
-        loadHistory();
+        void loadHistory();
     }, []);
 
     const handleClearHistory = async () => {
-        await window.ipcRenderer.invoke('history:clear');
-        window.location.reload();
+        try {
+            await window.ipcRenderer.invoke('history:clear');
+            setLanguage('en');
+            setHistory([]);
+            setShowClearConfirm(false);
+        } catch (error) {
+            console.error('[HistoryView] Failed to clear history:', error);
+        }
     };
 
     const getSatiricalStatus = (item: HistoryItem) => {
@@ -30,7 +42,21 @@ export const HistoryView: React.FC = () => {
         if (item.status === 'skipped') return t('historySkipped');
         if (item.status === 'reboot') return t('historyReboot');
         if (item.status === 'in-use') return t('historyInUse');
+        if (item.status === 'security-error') return t('statusSecurity');
         return item.details || t('historyBroken');
+    };
+
+    const formatVersionValue = (version: string | undefined) => {
+        if (!version) return '-';
+        const normalized = version.trim().toLowerCase();
+        const isUnknown =
+            normalized === 'unknown' ||
+            normalized === '<unknown>' ||
+            normalized === 'desconocido' ||
+            normalized === '<desconocido>' ||
+            normalized === '-';
+
+        return isUnknown ? version : `v${version}`;
     };
 
     if (loading) {
@@ -53,7 +79,7 @@ export const HistoryView: React.FC = () => {
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-900 dark:text-white text-sm">{t('resetAppConfirm')}</h4>
-                            <p className="text-xs text-gray-500 dark:text-slate-400">{t('resetAppMessage')}</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400">{t('resetAppMessage')}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -91,7 +117,7 @@ export const HistoryView: React.FC = () => {
             </header>
 
             {history.length === 0 ? (
-                <div className="flex h-64 flex-col items-center justify-center space-y-4 opacity-50 text-slate-600 dark:text-slate-400">
+                <div className="flex h-64 flex-col items-center justify-center space-y-4 text-slate-600 dark:text-slate-400">
                     <Clock className="h-16 w-16" />
                     <h2 className="text-xl font-bold">{t('historyEmpty')}</h2>
                     <p>{t('historyEmptySmall')}</p>
@@ -103,40 +129,51 @@ export const HistoryView: React.FC = () => {
                             <div className={clsx(
                                 "absolute left-0 flex h-10 w-10 items-center justify-center rounded-full border-4 transition-all duration-300",
                                 item.status === 'success' ? "bg-green-500 border-green-500/20 text-white" :
-                                    item.status === 'inapplicable' ? "bg-amber-500 border-amber-500/20 text-white" :
+                                    item.status === 'reboot' ? "bg-blue-600 border-blue-500/20 text-white" :
+                                        item.status === 'in-use' ? "bg-amber-500 border-amber-500/20 text-white" :
+                                            item.status === 'inapplicable' ? "bg-amber-500 border-amber-500/20 text-white" :
+                                                item.status === 'security-error' ? "bg-orange-600 border-orange-500/20 text-white" :
                                         "bg-red-500 border-red-500/20 text-white"
                             )}>
                                 {item.status === 'success' && <CheckCircle2 className="h-5 w-5" />}
+                                {item.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
+                                {item.status === 'in-use' && <AlertTriangle className="h-5 w-5" />}
                                 {item.status === 'inapplicable' && <AlertCircle className="h-5 w-5" />}
+                                {item.status === 'security-error' && <AlertTriangle className="h-5 w-5" />}
                                 {item.status === 'failed' && <XCircle className="h-5 w-5" />}
                                 {item.status === 'skipped' && <AlertCircle className="h-5 w-5 opacity-70" />}
                             </div>
 
-                            <div className="ml-16 w-full rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-white/5 dark:ring-white/10 transition-all duration-300 group-hover:shadow-md dark:group-hover:bg-white/10">
+                            <div className="ml-16 w-full rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-300 dark:bg-white/5 dark:ring-white/10 transition-all duration-300 group-hover:shadow-md dark:group-hover:bg-white/10">
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="font-bold text-black dark:text-white">{item.appName}</h3>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-slate-400">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-400">
                                         <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                                         {new Date(item.date).toLocaleString()}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-slate-400">
-                                    <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold dark:bg-white/10 uppercase text-gray-900 dark:text-slate-300">
-                                        {item.previousVersion ? `v${item.previousVersion} -> v${item.version}` : `v${item.version}`}
+                                <div className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-400">
+                                    <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-800 dark:bg-white/10 dark:text-slate-300">
+                                        {item.previousVersion
+                                            ? `${formatVersionValue(item.previousVersion)} -> ${formatVersionValue(item.version)}`
+                                            : formatVersionValue(item.version)}
                                     </span>
                                     <span className="h-1 w-1 rounded-full bg-slate-400 dark:bg-slate-700" />
                                     <span className={clsx(
                                         "font-medium italic",
                                         item.status === 'success' ? "text-green-600 dark:text-green-400" :
-                                            item.status === 'inapplicable' ? "text-amber-600 dark:text-amber-400" :
+                                            item.status === 'reboot' ? "text-blue-600 dark:text-blue-400" :
+                                                item.status === 'in-use' ? "text-amber-600 dark:text-amber-400" :
+                                                    item.status === 'inapplicable' ? "text-amber-600 dark:text-amber-400" :
+                                                        item.status === 'security-error' ? "text-orange-600 dark:text-orange-400" :
                                                 "text-red-600 dark:text-red-400"
                                     )}>
                                         {getSatiricalStatus(item)}
                                     </span>
                                 </div>
                                 {item.details && (
-                                    <div className="mt-3 p-3 rounded bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 text-xs font-mono text-slate-600 dark:text-slate-400 overflow-x-auto">
+                                    <div className="mt-3 rounded border border-slate-200 bg-slate-100 p-3 text-xs font-mono text-slate-700 overflow-x-auto dark:border-white/5 dark:bg-black/20 dark:text-slate-400">
                                         {item.details}
                                     </div>
                                 )}
