@@ -4,7 +4,11 @@ import { clsx } from 'clsx';
 import { Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
-export const HistoryView: React.FC = () => {
+interface HistoryViewProps {
+    onResetApp?: () => void;
+}
+
+export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     const { t, setLanguage } = useLanguage();
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -31,6 +35,7 @@ export const HistoryView: React.FC = () => {
             setLanguage('en');
             setHistory([]);
             setShowClearConfirm(false);
+            onResetApp?.();
         } catch (error) {
             console.error('[HistoryView] Failed to clear history:', error);
         }

@@ -24,7 +24,19 @@ async function ensureElevated() {
         await execa('net', ['session'], { reject: true });
         return true;
     } catch {
-        return false;
+        try {
+            const { execa } = await import('execa');
+            const { stdout } = await execa('powershell', [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                "([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
+            ], { reject: false });
+
+            return stdout.trim().toLowerCase() === 'true';
+        } catch {
+            return false;
+        }
     }
 }
 

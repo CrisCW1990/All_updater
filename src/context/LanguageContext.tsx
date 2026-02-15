@@ -23,8 +23,12 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     }, []);
 
     const setLanguage = (lang: Language) => {
+        const previous = language;
         setLangState(lang);
-        window.ipcRenderer.invoke('settings:set', 'language', lang);
+        void window.ipcRenderer.invoke('settings:set', 'language', lang).catch((error) => {
+            console.error('[LanguageContext] Failed to persist language:', error);
+            setLangState(previous);
+        });
     };
 
     const t = (key: TranslationKey): string => {

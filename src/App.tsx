@@ -117,16 +117,27 @@ export default function App() {
   }, [themeMode]);
 
   const toggleTheme = () => {
+    const previousMode = themeMode;
+    const previousDark = darkMode;
     const nextMode: ThemeMode = darkMode ? 'light' : 'dark';
     setThemeMode(nextMode);
     setDarkMode(nextMode === 'dark');
-    window.ipcRenderer.invoke('settings:set', 'theme', nextMode);
+    void window.ipcRenderer.invoke('settings:set', 'theme', nextMode).catch((error) => {
+      console.error('[App] Failed to persist theme:', error);
+      setThemeMode(previousMode);
+      setDarkMode(previousDark);
+      addToast(t('settingsSaveWarning'), 'warning');
+    });
   };
 
   const handleOnboardingClose = (dontShowAgain: boolean) => {
     setShowOnboarding(false);
     if (dontShowAgain) {
-      window.ipcRenderer.invoke('settings:set', 'hasSeenOnboarding', true);
+      void window.ipcRenderer.invoke('settings:set', 'hasSeenOnboarding', true).catch((error) => {
+        console.error('[App] Failed to persist onboarding preference:', error);
+        setShowOnboarding(true);
+        addToast(t('settingsSaveWarning'), 'warning');
+      });
     }
   };
 
@@ -165,7 +176,23 @@ export default function App() {
       ) {
         setIsWingetMissing(true);
         setHasChecked(true);
+      } else if (errorMessage.includes('WingetSourceIssue')) {
+        setIsWingetMissing(false);
+        addToast(t('wingetSourceIssue'), 'warning');
+        setHasChecked(false);
+      } else if (errorMessage.includes('WingetAccessDenied')) {
+        setIsWingetMissing(false);
+        addToast(t('wingetPermissionIssue'), 'error');
+        setHasChecked(false);
+      } else if (
+        errorMessage.includes('WingetOutputUnparseable') ||
+        errorMessage.includes('WingetOutputParseError')
+      ) {
+        setIsWingetMissing(false);
+        addToast(t('wingetParseIssue'), 'error');
+        setHasChecked(false);
       } else {
+        setIsWingetMissing(false);
         addToast(t('checkFailedTryAgain'), 'error');
         setHasChecked(false);
       }
@@ -524,7 +551,17 @@ export default function App() {
           )}
         </div>
       ) : (
-        <HistoryView />
+        <HistoryView
+          onResetApp={() => {
+            setShowOnboarding(true);
+            setActiveTab('dashboard');
+            setHasChecked(false);
+            setUpdates([]);
+            setSelectedIds(new Set());
+            setShowSummary(false);
+            setIsWingetMissing(false);
+          }}
+        />
       )}
 
       {/* Summary Report Modal */}
@@ -593,7 +630,7 @@ export default function App() {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-slate-900 dark:text-white truncate">{res.appName}</h4>
                     <p className="text-[10px] text-slate-700 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">
-                      Version {res.version}
+                      {t('versionLabel')} {res.version}
                     </p>
                     <p className="text-xs text-slate-700 dark:text-slate-400 italic font-medium">
                       {res.status === 'success' ? t('statusSuccess') :

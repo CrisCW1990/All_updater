@@ -6,10 +6,17 @@ import { SystemService } from './system';
 export class WingetService {
     private systemService: SystemService;
     private historyService?: Pick<HistoryService, 'getHistory'>;
+    private readonly debugWinget = process.env.ALL_UPDATER_DEBUG_WINGET === '1';
 
     constructor(systemService: SystemService = new SystemService(), historyService?: Pick<HistoryService, 'getHistory'>) {
         this.systemService = systemService;
         this.historyService = historyService;
+    }
+
+    private debug(...args: unknown[]): void {
+        if (this.debugWinget) {
+            console.log(...args);
+        }
     }
 
     private isSpanishSystemLocale(): boolean {
@@ -21,16 +28,26 @@ export class WingetService {
         return /(disable-interactivity).*(unknown|unsupported|invalid|unrecognized)|unknown option.*disable-interactivity|no option named.*disable-interactivity/i.test(output);
     }
 
+    private isIncludeUnknownUnsupported(output: string): boolean {
+        return /(include-unknown).*(unknown|unsupported|invalid|unrecognized)|unknown option.*include-unknown|no option named.*include-unknown/i.test(output);
+    }
+
     private async runWingetCommandWithFallback(
         args: string[],
         options: { timeout: number, includeAll: boolean }
     ): Promise<{ stdout: string, stderr: string, all: string }> {
-        const attempts = [
+        const queue: string[][] = [
             [...args, '--disable-interactivity'],
-            args
+            [...args]
         ];
+        const visited = new Set<string>();
 
-        for (const attemptArgs of attempts) {
+        while (queue.length > 0) {
+            const attemptArgs = queue.shift()!;
+            const key = attemptArgs.join('\u0000');
+            if (visited.has(key)) continue;
+            visited.add(key);
+
             const result = await execa('winget', attemptArgs, {
                 reject: false,
                 timeout: options.timeout,
@@ -47,6 +64,13 @@ export class WingetService {
 
             if (attemptArgs.includes('--disable-interactivity') && this.isDisableInteractivityUnsupported(combined)) {
                 console.warn('[WingetService] --disable-interactivity unsupported. Retrying without it...');
+                queue.push(attemptArgs.filter(arg => arg !== '--disable-interactivity'));
+                continue;
+            }
+
+            if (attemptArgs.includes('--include-unknown') && this.isIncludeUnknownUnsupported(combined)) {
+                console.warn('[WingetService] --include-unknown unsupported. Retrying without it...');
+                queue.push(attemptArgs.filter(arg => arg !== '--include-unknown'));
                 continue;
             }
 
@@ -108,7 +132,7 @@ export class WingetService {
 
     async getAvailableUpdates(): Promise<AppUpdate[]> {
         try {
-            console.log('[WingetService] Starting update check...');
+            this.debug('[WingetService] Starting update check...');
             let updates = await this.tryGetUpdatesFromJson();
             let textOutput = '';
             let retriedWithUpgrade = false;
@@ -122,26 +146,25 @@ export class WingetService {
                     includeAll: true
                 });
                 textOutput = textResult.all;
-                console.log('[WingetService] Winget text command finished. Parsing output...');
-                console.log('[WingetService] Raw stdout length:', textOutput.length);
-                console.log('[WingetService] First 500 chars:', textOutput.substring(0, 500));
+                this.debug('[WingetService] Winget text command finished. Parsing output...');
+                this.debug('[WingetService] Raw stdout length:', textOutput.length);
 
                 try {
                     updates = this.parseWingetOutput(textOutput);
                 } catch (parseError) {
                     if (this.containsNoUpdatesMessage(textOutput)) {
-                        console.log('[WingetService] No updates detected from text output.');
+                        this.debug('[WingetService] No updates detected from text output.');
                         updates = [];
                     } else {
-                    console.warn('[WingetService] Primary text parse failed. Retrying with upgrade output...', parseError);
-                    const retryResult = await this.runWingetCommandWithFallback(
-                        ['upgrade', '--include-unknown', '--accept-source-agreements', '--accept-package-agreements'],
-                        { timeout: 45000, includeAll: true }
-                    );
-                    textOutput = retryResult.all;
-                    retriedWithUpgrade = true;
+                        console.warn('[WingetService] Primary text parse failed. Retrying with upgrade output...', parseError);
+                        const retryResult = await this.runWingetCommandWithFallback(
+                            ['upgrade', '--include-unknown', '--accept-source-agreements', '--accept-package-agreements'],
+                            { timeout: 45000, includeAll: true }
+                        );
+                        textOutput = retryResult.all;
+                        retriedWithUpgrade = true;
                         if (this.containsNoUpdatesMessage(textOutput)) {
-                            console.log('[WingetService] No updates detected after upgrade retry.');
+                            this.debug('[WingetService] No updates detected after upgrade retry.');
                             updates = [];
                         } else {
                             updates = this.parseWingetOutput(textOutput);
@@ -150,9 +173,9 @@ export class WingetService {
                 }
             }
 
-            console.log('[WingetService] Parsed updates count:', updates.length);
+            this.debug('[WingetService] Parsed updates count:', updates.length);
             if (updates.length > 0) {
-                console.log('[WingetService] First update:', JSON.stringify(updates[0]));
+                this.debug('[WingetService] First update:', JSON.stringify(updates[0]));
             }
 
             // AUTO-HEALING: Only if search fails with known error codes or specific "ambiguous" output that isn't really ambiguous (winget quirk)
@@ -182,6 +205,10 @@ export class WingetService {
                 retriedWithUpgrade = true;
             }
 
+            if (textOutput && updates.length === 0 && isSourceError) {
+                throw new Error('WingetSourceIssue: Winget sources are unhealthy or unavailable.');
+            }
+
             if (this.historyService) {
                 // updates = updates.filter(u => !this.historyService.isVersionSkipped(u.id, u.available));
                 const history = this.historyService.getHistory(); // Assuming getHistory is public or I can access it
@@ -208,16 +235,30 @@ export class WingetService {
                 });
             }
 
-            console.log(`[WingetService] Parsed ${updates.length} updates after filtering.`);
+            this.debug(`[WingetService] Parsed ${updates.length} updates after filtering.`);
             return updates;
         } catch (error) {
             const err = error as { code?: string, message?: string };
+            const message = err.message || '';
             if (
                 err.code === 'ENOENT' ||
-                /ENOENT|not found|not recognized|No se reconoce/i.test(err.message || '')
+                /ENOENT|not found|not recognized|No se reconoce/i.test(message)
             ) {
                 throw new Error('WingetNotFound: winget executable is missing.');
             }
+
+            if (/WingetOutputParseError/i.test(message)) {
+                throw new Error('WingetOutputUnparseable: Winget output format could not be read.');
+            }
+
+            if (/0x8a15005e|0x8a150001|source.+(failed|error|invalid|broken)|msstore source/i.test(message)) {
+                throw new Error('WingetSourceIssue: Winget sources are unavailable.');
+            }
+
+            if (/access is denied|permiso denegado|administrator privileges|required elevation|elevation/i.test(message)) {
+                throw new Error('WingetAccessDenied: Administrator privileges are required.');
+            }
+
             console.error('[WingetService] Failed to check updates:', error);
             throw error;
         }
@@ -225,7 +266,7 @@ export class WingetService {
 
     async ensureSourcesHealthy(): Promise<void> {
         try {
-            console.log('[WingetService] Resetting winget sources...');
+            this.debug('[WingetService] Resetting winget sources...');
             await execa('winget', ['source', 'reset', '--force'], { timeout: 30000 });
             await execa('winget', ['source', 'update'], { timeout: 60000 });
         } catch (e) {
@@ -234,7 +275,7 @@ export class WingetService {
     }
 
     async installUpdate(id: string, onLog?: (log: string) => void): Promise<void> {
-        console.log(`[WingetService] Installing update: ${id}`);
+        this.debug(`[WingetService] Installing update: ${id}`);
         const arch = this.systemService.getWingetArch();
 
         const baseArgs = [
@@ -261,7 +302,13 @@ export class WingetService {
             try {
                 await subprocess;
             } catch (error: unknown) {
-                const wingetError = error as { exitCode?: number };
+                const wingetError = error as { exitCode?: number, message?: string, stdout?: string, stderr?: string };
+                const unsupportedCombined = `${wingetError.message || ''}\n${wingetError.stdout || ''}\n${wingetError.stderr || ''}`;
+                if (args.includes('--include-unknown') && this.isIncludeUnknownUnsupported(unsupportedCombined)) {
+                    console.warn(`[WingetService] --include-unknown unsupported for ${id}. Retrying without it...`);
+                    await runCmd(args.filter(arg => arg !== '--include-unknown'));
+                    return;
+                }
                 const code = wingetError.exitCode;
                 // 3010: Reboot required, 0x8A15001A: Reboot required
                 if (code === 3010 || code === -1978335206) {
@@ -341,7 +388,7 @@ export class WingetService {
                             '--accept-source-agreements'
                         ];
                         await execa('winget', fallbackArgs);
-                        console.log(`[WingetService] Force install fallback for ${id} succeeded.`);
+                        this.debug(`[WingetService] Force install fallback for ${id} succeeded.`);
                         return;
                     } catch (fallbackError: unknown) {
                         console.error(`[WingetService] Force install fallback for ${id} failed:`, fallbackError);
@@ -351,7 +398,7 @@ export class WingetService {
 
                 try {
                     await runCmd([...baseArgs, '--force']);
-                    console.log(`[WingetService] Force update for ${id} succeeded.`);
+                    this.debug(`[WingetService] Force update for ${id} succeeded.`);
                     return;
                 } catch {
                     console.error(`[WingetService] Force update for ${id} also failed.`);
@@ -367,7 +414,18 @@ export class WingetService {
             await execa('net', ['session'], { reject: true });
             return true;
         } catch {
-            return false;
+            try {
+                const { stdout } = await execa('powershell', [
+                    '-NoProfile',
+                    '-NonInteractive',
+                    '-Command',
+                    "([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
+                ], { reject: false });
+
+                return stdout.trim().toLowerCase() === 'true';
+            } catch {
+                return false;
+            }
         }
     }
 
@@ -501,6 +559,39 @@ export class WingetService {
             normalized === '-';
     }
 
+    private isIgnorableOutputLine(line: string): boolean {
+        const trimmed = line.trim();
+        if (!trimmed) return true;
+        if (trimmed.startsWith('-')) return true;
+        if (/^\d+\s+paquete/.test(trimmed) || /^\d+\s+package/.test(trimmed)) return true;
+        if (this.containsNoUpdatesMessage(trimmed)) return true;
+        return false;
+    }
+
+    private parseDataLinesWithRegex(lines: string[]): AppUpdate[] {
+        const updates: AppUpdate[] = [];
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (this.isIgnorableOutputLine(trimmed)) continue;
+
+            const match = line.match(/^(.*?)\s{2,}(\S+)\s{2,}(\S+)\s{2,}(\S+)(?:\s{2,}(\S+))?\s*$/);
+            if (!match) continue;
+
+            const [, rawName, rawId, rawVersion, rawAvailable, rawSource] = match;
+            const name = rawName.trim();
+            const id = rawId.trim();
+            const version = rawVersion.trim();
+            const available = rawAvailable.trim();
+            const source = rawSource?.trim() || 'winget';
+
+            if (!name || !available || !this.isLikelyPackageId(id, { name, version, available })) {
+                continue;
+            }
+            updates.push({ name, id, version, available, source });
+        }
+        return updates;
+    }
+
     private parseWingetOutput(output: string): AppUpdate[] {
         // Clean ANSI escape codes and progress bar artifacts
         // eslint-disable-next-line no-control-regex
@@ -523,15 +614,20 @@ export class WingetService {
                 versionTokens.some(token => trimmed.includes(token));
         });
 
-        console.log('[WingetService] Header index:', headerIndex);
+        this.debug('[WingetService] Header index:', headerIndex);
         if (headerIndex >= 0) {
-            console.log('[WingetService] Header line:', lines[headerIndex]);
+            this.debug('[WingetService] Header line:', lines[headerIndex]);
         }
 
         if (headerIndex === -1) {
             const noUpdates = this.containsNoUpdatesMessage(output) || output.trim() === '';
             if (noUpdates) {
                 return [];
+            }
+
+            const parsedWithoutHeader = this.parseDataLinesWithRegex(lines);
+            if (parsedWithoutHeader.length > 0) {
+                return parsedWithoutHeader;
             }
 
             if (this.isProgressOnlyNoise(output)) {
@@ -557,45 +653,16 @@ export class WingetService {
         const availableStart = findCol(availableTokens);
         const sourceStart = findCol(sourceTokens);
 
-        console.log('[WingetService] Column positions - Id:', idStart, 'Version:', versionStart, 'Available:', availableStart, 'Source:', sourceStart);
+        this.debug('[WingetService] Column positions - Id:', idStart, 'Version:', versionStart, 'Available:', availableStart, 'Source:', sourceStart);
 
         // Fallback to dash detection if keywords are not found exactly
         if (idStart === -1 || versionStart === -1 || availableStart === -1) {
-            const dataLines = lines.slice(headerIndex + 2);
-            for (const line of dataLines) {
-                const trimmed = line.trim();
-                if (
-                    !trimmed ||
-                    trimmed.startsWith('-') ||
-                    trimmed.startsWith('No se han') ||
-                    trimmed.startsWith('No updates found') ||
-                    trimmed.startsWith('No applicable update found') ||
-                    trimmed.startsWith('No installed package found matching input criteria') ||
-                    trimmed.includes('actualizaciones disponibles') ||
-                    /^\d+\s+paquete/.test(trimmed) ||
-                    /^\d+\s+package/.test(trimmed)
-                ) {
-                    continue;
-                }
-
-                const match = line.match(/^(.*?)\s{2,}(\S+)\s{2,}(\S+)\s{2,}(\S+)(?:\s{2,}(\S+))?\s*$/);
-                if (!match) continue;
-
-                const [, rawName, rawId, rawVersion, rawAvailable, rawSource] = match;
-                const name = rawName.trim();
-                const id = rawId.trim();
-                const version = rawVersion.trim();
-                const available = rawAvailable.trim();
-                const source = rawSource?.trim() || 'winget';
-
-                if (!name || !available || !this.isLikelyPackageId(id, { name, version, available })) continue;
-                updates.push({ name, id, version, available, source });
-            }
-            return updates;
+            const dataLines = lines.slice(headerIndex + 1);
+            return this.parseDataLinesWithRegex(dataLines);
         }
 
         const dataLines = lines.slice(headerIndex + 2);
-        console.log('[WingetService] Processing', dataLines.length, 'data lines');
+        this.debug('[WingetService] Processing', dataLines.length, 'data lines');
 
         for (const line of dataLines) {
             if (!line.trim() ||
@@ -608,7 +675,7 @@ export class WingetService {
                 /^\d+\s+paquete/.test(line.trim()) || // Skip footer notes (ES)
                 /^\d+\s+package/.test(line.trim()) // Skip footer notes (EN)
             ) {
-                console.log('[WingetService] Skipping line:', line.substring(0, 50));
+                this.debug('[WingetService] Skipping line:', line.substring(0, 50));
                 continue;
             }
 
@@ -625,12 +692,12 @@ export class WingetService {
                 : line.substring(availableStart).trim();
             const source = sourceStart !== -1 ? line.substring(sourceStart).trim() : 'winget';
 
-            console.log('[WingetService] Parsed line - Name:', name, 'ID:', id, 'Version:', version, 'Available:', available);
+            this.debug('[WingetService] Parsed line - Name:', name, 'ID:', id, 'Version:', version, 'Available:', available);
 
             if (name && available && this.isLikelyPackageId(id, { name, version, available })) {
                 updates.push({ name, id, version, available, source });
             } else {
-                console.log('[WingetService] Rejected - invalid ID');
+                this.debug('[WingetService] Rejected - invalid ID');
             }
         }
 

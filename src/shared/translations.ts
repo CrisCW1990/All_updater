@@ -20,8 +20,12 @@ export const translations = {
         readyDesc: "Hit the button to scour the depths of your PC for outdated software.",
         checkUpdates: "Check for Updates",
         checkFailedTryAgain: "Could not read Winget output. Please try again.",
+        wingetParseIssue: "Winget returned an unexpected format. Please try again.",
+        wingetSourceIssue: "Winget sources are not healthy right now. Refresh Winget sources and retry.",
+        wingetPermissionIssue: "Administrator privileges are required to run this operation.",
+        settingsSaveWarning: "Could not save this preference. Previous value restored.",
         footerLove: "Crafted with love by",
-        footerAI: "Partially created with AI (mostly to judge your outdated software).",
+        footerAI: "Partially created with AI (mainly because I was kinda too lazy to write all the code by myself).",
 
         // Dashboard States
         allClean: "All systems go!",
@@ -39,6 +43,7 @@ export const translations = {
         current: "Current",
         new: "New",
         unknown: "Unknown",
+        versionLabel: "Version",
 
         // Toast Notifications
         updateSuccess: "Successfully updated",
@@ -139,8 +144,12 @@ export const translations = {
         readyDesc: "Pulsa el botón para escudriñar las profundidades de tu PC en busca de software obsoleto.",
         checkUpdates: "Buscar Actualizaciones",
         checkFailedTryAgain: "No se pudo leer la salida de Winget. Intenta de nuevo.",
+        wingetParseIssue: "Winget devolvió un formato inesperado. Intenta nuevamente.",
+        wingetSourceIssue: "Las fuentes de Winget no están saludables ahora. Actualízalas e inténtalo otra vez.",
+        wingetPermissionIssue: "Se requieren privilegios de administrador para esta operación.",
+        settingsSaveWarning: "No se pudo guardar esta preferencia. Se restauró el valor anterior.",
         footerLove: "Hecho con amor por",
-        footerAI: "Parcialmente creado con IA (principalmente para juzgar tus apps viejas).",
+        footerAI: "Parcialmente creado con IA (principalmente por que medio pereza hacer el codigo yo solo).",
 
         // Dashboard States
         allClean: "¡Todo en orden!",
@@ -158,6 +167,7 @@ export const translations = {
         current: "Actual",
         new: "Nueva",
         unknown: "Desconocido",
+        versionLabel: "Versión",
 
         // Toast Notifications
         updateSuccess: "Actualizado con éxito:",

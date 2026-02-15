@@ -1,38 +1,48 @@
-import { app as t, ipcMain as d, BrowserWindow as i, dialog as l } from "electron";
-import r from "path";
-import { fileURLToPath as u } from "url";
-const m = u(import.meta.url), c = r.dirname(m);
-process.env.DIST = r.join(c, "../dist");
-process.env.VITE_PUBLIC = t.isPackaged ? process.env.DIST : r.join(process.env.DIST, "../public");
-if (t.isPackaged) {
-  const o = process.env.PORTABLE_EXECUTABLE_DIR || r.dirname(t.getPath("exe")), e = r.join(o, "data");
-  t.setPath("userData", e);
+import { app as o, ipcMain as u, BrowserWindow as c, dialog as l } from "electron";
+import n from "path";
+import { fileURLToPath as m } from "url";
+const f = m(import.meta.url), p = n.dirname(f);
+process.env.DIST = n.join(p, "../dist");
+process.env.VITE_PUBLIC = o.isPackaged ? process.env.DIST : n.join(process.env.DIST, "../public");
+if (o.isPackaged) {
+  const t = process.env.PORTABLE_EXECUTABLE_DIR || n.dirname(o.getPath("exe")), e = n.join(t, "data");
+  o.setPath("userData", e);
 }
-async function f() {
+async function w() {
   try {
-    const { execa: o } = await import("./index-CWXQCQWA.js").then((e) => e.i);
-    return await o("net", ["session"], { reject: !0 }), !0;
+    const { execa: t } = await import("./index-CWXQCQWA.js").then((e) => e.i);
+    return await t("net", ["session"], { reject: !0 }), !0;
   } catch {
-    return !1;
+    try {
+      const { execa: t } = await import("./index-CWXQCQWA.js").then((a) => a.i), { stdout: e } = await t("powershell", [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
+      ], { reject: !1 });
+      return e.trim().toLowerCase() === "true";
+    } catch {
+      return !1;
+    }
   }
 }
-let n, a = !1;
+let i, r = !1;
 const s = process.env.VITE_DEV_SERVER_URL;
-function p() {
-  let o = !1;
-  n = new i({
+function d() {
+  let t = !1;
+  i = new c({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: r.join(c, "preload.mjs"),
+      preload: n.join(p, "preload.mjs"),
       nodeIntegration: !1,
       contextIsolation: !0
     },
     autoHideMenuBar: !0,
     title: "All Updater",
-    icon: r.join(process.env.VITE_PUBLIC, "logo.png")
-  }), n.on("close", (e) => {
-    o || a && (e.preventDefault(), l.showMessageBoxSync(n, {
+    icon: n.join(process.env.VITE_PUBLIC, "logo.png")
+  }), i.on("close", (e) => {
+    t || r && (e.preventDefault(), l.showMessageBoxSync(i, {
       type: "warning",
       buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
       title: "Operation in Progress / Operacion en progreso",
@@ -43,30 +53,30 @@ Hay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede de
 Se recomienda esperar a que el proceso termine.`,
       defaultId: 0,
       cancelId: 0
-    }) === 1 && (o = !0, a = !1, n?.close()));
-  }), n.webContents.on("did-finish-load", () => {
-    n?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  }), s ? n.loadURL(s) : n.loadFile(r.join(process.env.DIST || "", "index.html"));
+    }) === 1 && (t = !0, r = !1, i?.close()));
+  }), i.webContents.on("did-finish-load", () => {
+    i?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), s ? i.loadURL(s) : i.loadFile(n.join(process.env.DIST || "", "index.html"));
 }
-d.handle("system:set-operation-active", (o, e) => {
-  a = e;
+u.handle("system:set-operation-active", (t, e) => {
+  r = e;
 });
-t.on("window-all-closed", () => {
-  process.platform !== "darwin" && t.quit();
+o.on("window-all-closed", () => {
+  process.platform !== "darwin" && o.quit();
 });
-t.on("activate", () => {
-  i.getAllWindows().length === 0 && p();
+o.on("activate", () => {
+  c.getAllWindows().length === 0 && d();
 });
-t.whenReady().then(async () => {
-  if (!await f()) {
+o.whenReady().then(async () => {
+  if (!await w()) {
     l.showErrorBox(
       "Insufficient privileges / Privilegios insuficientes",
       `All Updater requires Administrator permissions to manage Winget and create restore points.
 
 All Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion.`
-    ), t.quit();
+    ), o.quit();
     return;
   }
-  const { setupIPC: e } = await import("./ipc-D1j8QDcR.js");
-  e(), p();
+  const { setupIPC: e } = await import("./ipc-KZiUn7u0.js");
+  e(), d();
 });
