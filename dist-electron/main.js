@@ -1,38 +1,38 @@
-import { app as e, ipcMain as d, BrowserWindow as s, dialog as l } from "electron";
-import n from "path";
+import { app as t, ipcMain as d, BrowserWindow as i, dialog as l } from "electron";
+import r from "path";
 import { fileURLToPath as u } from "url";
-const m = u(import.meta.url), c = n.dirname(m);
-process.env.DIST = n.join(c, "../dist");
-process.env.VITE_PUBLIC = e.isPackaged ? process.env.DIST : n.join(process.env.DIST, "../public");
-if (e.isPackaged) {
-  const t = n.join(n.dirname(e.getPath("exe")), "data");
-  e.setPath("userData", t);
+const m = u(import.meta.url), c = r.dirname(m);
+process.env.DIST = r.join(c, "../dist");
+process.env.VITE_PUBLIC = t.isPackaged ? process.env.DIST : r.join(process.env.DIST, "../public");
+if (t.isPackaged) {
+  const o = process.env.PORTABLE_EXECUTABLE_DIR || r.dirname(t.getPath("exe")), e = r.join(o, "data");
+  t.setPath("userData", e);
 }
 async function f() {
   try {
-    const { execa: t } = await import("./index-CWXQCQWA.js").then((a) => a.i);
-    return await t("net", ["session"], { reject: !0 }), !0;
+    const { execa: o } = await import("./index-CWXQCQWA.js").then((e) => e.i);
+    return await o("net", ["session"], { reject: !0 }), !0;
   } catch {
     return !1;
   }
 }
-let o, i = !1;
-const r = process.env.VITE_DEV_SERVER_URL;
+let n, a = !1;
+const s = process.env.VITE_DEV_SERVER_URL;
 function p() {
-  let t = !1;
-  o = new s({
+  let o = !1;
+  n = new i({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: n.join(c, "preload.mjs"),
+      preload: r.join(c, "preload.mjs"),
       nodeIntegration: !1,
       contextIsolation: !0
     },
     autoHideMenuBar: !0,
     title: "All Updater",
-    icon: n.join(process.env.VITE_PUBLIC, "logo.png")
-  }), o.on("close", (a) => {
-    t || i && (a.preventDefault(), l.showMessageBoxSync(o, {
+    icon: r.join(process.env.VITE_PUBLIC, "logo.png")
+  }), n.on("close", (e) => {
+    o || a && (e.preventDefault(), l.showMessageBoxSync(n, {
       type: "warning",
       buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
       title: "Operation in Progress / Operacion en progreso",
@@ -43,30 +43,30 @@ Hay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede de
 Se recomienda esperar a que el proceso termine.`,
       defaultId: 0,
       cancelId: 0
-    }) === 1 && (t = !0, i = !1, o?.close()));
-  }), o.webContents.on("did-finish-load", () => {
-    o?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  }), r ? o.loadURL(r) : o.loadFile(n.join(process.env.DIST || "", "index.html"));
+    }) === 1 && (o = !0, a = !1, n?.close()));
+  }), n.webContents.on("did-finish-load", () => {
+    n?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), s ? n.loadURL(s) : n.loadFile(r.join(process.env.DIST || "", "index.html"));
 }
-d.handle("system:set-operation-active", (t, a) => {
-  i = a;
+d.handle("system:set-operation-active", (o, e) => {
+  a = e;
 });
-e.on("window-all-closed", () => {
-  process.platform !== "darwin" && e.quit();
+t.on("window-all-closed", () => {
+  process.platform !== "darwin" && t.quit();
 });
-e.on("activate", () => {
-  s.getAllWindows().length === 0 && p();
+t.on("activate", () => {
+  i.getAllWindows().length === 0 && p();
 });
-e.whenReady().then(async () => {
+t.whenReady().then(async () => {
   if (!await f()) {
     l.showErrorBox(
       "Insufficient privileges / Privilegios insuficientes",
       `All Updater requires Administrator permissions to manage Winget and create restore points.
 
 All Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion.`
-    ), e.quit();
+    ), t.quit();
     return;
   }
-  const { setupIPC: a } = await import("./ipc-D1j8QDcR.js");
-  a(), p();
+  const { setupIPC: e } = await import("./ipc-D1j8QDcR.js");
+  e(), p();
 });

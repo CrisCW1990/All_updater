@@ -12,7 +12,8 @@ process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.
 // --- Persistencia Portable ---
 // Si la app está empaquetada (portable), guardamos los datos localmente
 if (app.isPackaged) {
-    const portableDataPath = path.join(path.dirname(app.getPath('exe')), 'data');
+    const portableBaseDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
+    const portableDataPath = path.join(portableBaseDir, 'data');
     app.setPath('userData', portableDataPath);
 }
 
