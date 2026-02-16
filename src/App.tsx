@@ -5,7 +5,13 @@ import { RestoreModal } from './components/RestoreModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ConflictModal } from './components/ConflictModal';
 import { HistoryView } from './components/HistoryView.tsx';
-import type { AppUpdate, HistoryItem } from './shared/types';
+import type {
+  AppUpdate,
+  AppVersionCheckResult,
+  HistoryItem,
+  RestoreFailureReason,
+  RestorePointResult
+} from './shared/types';
 import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { ToastContainer, type ToastType } from './components/Toast';
 import { useLanguage } from './context/LanguageContext';
@@ -42,11 +48,25 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [darkMode, setDarkMode] = useState(true);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [appUpdateInfo, setAppUpdateInfo] = useState<AppVersionCheckResult | null>(null);
+  const [checkingAppVersion, setCheckingAppVersion] = useState(false);
+  const [downloadingAppUpdate, setDownloadingAppUpdate] = useState(false);
+  const [appUpdateProgress, setAppUpdateProgress] = useState<number | null>(null);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
   const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
   const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     return String(error);
+  };
+
+  const getRestoreFailureMessage = (reason?: RestoreFailureReason): string => {
+    if (reason === 'system-protection-disabled') return t('restoreFailDisabled');
+    if (reason === 'frequency-limit') return t('restoreFailFrequency');
+    if (reason === 'access-denied') return t('restoreFailAccess');
+    if (reason === 'service-unavailable') return t('restoreFailService');
+    if (reason === 'verification-failed') return t('restoreFailVerification');
+    if (reason === 'command-failed') return t('restoreFailCommand');
+    return t('restoreFailUnknown');
   };
 
   const resolveDarkMode = (mode: ThemeMode): boolean => {
@@ -95,9 +115,23 @@ export default function App() {
         console.error('[App] Failed to load onboarding settings:', error);
         setShowOnboarding(true);
       }
+
+      void window.ipcRenderer
+        .invoke('system:check-app-update')
+        .then((result) => setAppUpdateInfo(result))
+        .catch((error) => console.error('[App] Silent app-update check failed:', error));
     };
 
     void initializeApp();
+  }, []);
+
+  useEffect(() => {
+    const handleAppUpdateProgress = (_event: unknown, progress: { percent: number | null }) => {
+      setAppUpdateProgress(progress.percent);
+    };
+
+    window.ipcRenderer.on('app-update:download-progress', handleAppUpdateProgress);
+    return () => window.ipcRenderer.off('app-update:download-progress', handleAppUpdateProgress);
   }, []);
 
   useEffect(() => {
@@ -148,6 +182,74 @@ export default function App() {
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const checkAppUpdate = async (silent = false) => {
+    setCheckingAppVersion(true);
+    try {
+      const result = await window.ipcRenderer.invoke('system:check-app-update');
+      setAppUpdateInfo(result);
+
+      if (silent) return;
+
+      if (!result.success) {
+        if (result.offline) {
+          addToast(t('appUpdateOffline'), 'info');
+        } else {
+          addToast(t('appUpdateCheckFailed'), 'warning');
+        }
+        return;
+      }
+
+      if (result.hasUpdate) {
+        addToast(`${t('appUpdateAvailable')}: v${result.latestVersion}`, 'info');
+      } else {
+        addToast(t('appUpdateNoUpdates'), 'info');
+      }
+    } catch (error) {
+      console.error('[App] Failed to check app version:', error);
+      if (!silent) {
+        addToast(t('appUpdateCheckFailed'), 'warning');
+      }
+    } finally {
+      setCheckingAppVersion(false);
+    }
+  };
+
+  const downloadAppUpdate = async () => {
+    if (!appUpdateInfo?.assetUrl || !appUpdateInfo.assetName) {
+      addToast(t('appUpdateMissingAsset'), 'warning');
+      return;
+    }
+
+    setDownloadingAppUpdate(true);
+    setAppUpdateProgress(0);
+    try {
+      const result = await window.ipcRenderer.invoke(
+        'system:download-app-update',
+        appUpdateInfo.assetUrl,
+        appUpdateInfo.assetName
+      );
+
+      if (result.canceled) {
+        addToast(t('appUpdateDownloadCanceled'), 'info');
+        return;
+      }
+
+      if (result.success) {
+        addToast(t('appUpdateDownloadSuccess'), 'success');
+        return;
+      }
+
+      console.error('[App] App update download failed:', result.error);
+      addToast(t('appUpdateDownloadFailed'), 'error');
+    } catch (error) {
+      console.error('[App] App update download threw error:', error);
+      addToast(t('appUpdateDownloadFailed'), 'error');
+    } finally {
+      setDownloadingAppUpdate(false);
+      setTimeout(() => setAppUpdateProgress(null), 500);
+    }
   };
 
   const checkUpdates = async () => {
@@ -237,13 +339,17 @@ export default function App() {
         setIsCreatingRestore(true);
         setCurrentLogLine(t('creatingRestore'));
         try {
-          const success = (await window.ipcRenderer.invoke('system:create-restore-point', "All Updater Auto-Restore")) as unknown as boolean;
-          if (!success) {
-            throw new Error("System Restore failed");
+          const result = await window.ipcRenderer.invoke('system:create-restore-point', "All Updater Auto-Restore") as RestorePointResult;
+          if (!result.success) {
+            const specificMessage = getRestoreFailureMessage(result.reason);
+            console.error('[App] Restore point failed:', result);
+            addToast(specificMessage, "error");
+            setCurrentLogLine(specificMessage);
+            return; // ABORT updates
           }
         } catch (e) {
           console.error("Failed to create restore point", e);
-          addToast(t('restoreFailedAbort'), "error");
+          addToast(`${t('restoreFailedAbort')} ${t('restoreFailUnknown')}`, "error");
           setCurrentLogLine(null);
           return; // ABORT updates
         } finally {
@@ -404,6 +510,16 @@ export default function App() {
             </div>
 
             <div className="flex gap-3">
+              {!isInstalling && !isCreatingRestore && (
+                <button
+                  onClick={() => checkAppUpdate(false)}
+                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  title={t('appUpdateCheck')}
+                >
+                  <RefreshCw className={clsx("h-5 w-5", checkingAppVersion && "animate-spin")} />
+                </button>
+              )}
+
               {updates.length > 0 && !loading && !isInstalling && (
                 <button
                   onClick={checkUpdates}
@@ -435,6 +551,56 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {appUpdateInfo?.success && appUpdateInfo.hasUpdate && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 dark:border-blue-500/20 dark:bg-blue-900/10">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-blue-900 dark:text-blue-300">{t('appUpdateAvailable')}</p>
+                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    {t('appUpdateCurrent')}: v{appUpdateInfo.currentVersion} • {t('appUpdateLatest')}: v{appUpdateInfo.latestVersion}
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    {t('appUpdatePrivacyNote')}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={downloadAppUpdate}
+                    disabled={downloadingAppUpdate || !appUpdateInfo.assetUrl || !appUpdateInfo.assetName}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {downloadingAppUpdate ? t('appUpdateDownloading') : t('appUpdateDownload')}
+                  </button>
+                  {appUpdateInfo.releaseUrl && (
+                    <button
+                      onClick={() => window.ipcRenderer.invoke('system:open-url', appUpdateInfo.releaseUrl!)}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                    >
+                      {t('appUpdateOpenRelease')}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {downloadingAppUpdate && (
+                <div className="mt-3">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/30">
+                    <div
+                      className="h-full bg-blue-600 transition-all duration-300 dark:bg-blue-400"
+                      style={{ width: `${appUpdateProgress ?? 0}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] font-medium text-slate-700 dark:text-slate-400">
+                    {appUpdateProgress !== null
+                      ? `${t('appUpdateDownloading')} ${appUpdateProgress}%`
+                      : t('appUpdateDownloading')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {isWingetMissing ? (
             <div className="flex flex-1 flex-col items-center justify-center space-y-6 py-20 text-center">

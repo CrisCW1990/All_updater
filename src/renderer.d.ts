@@ -1,4 +1,11 @@
-import type { AppUpdate, HistoryItem } from './shared/types';
+import type {
+    AppUpdate,
+    AppUpdateDownloadProgress,
+    AppUpdateDownloadResult,
+    AppVersionCheckResult,
+    HistoryItem,
+    RestorePointResult
+} from './shared/types';
 
 interface SystemInfo {
     arch: string;
@@ -16,12 +23,13 @@ interface SettingsMap {
 interface RendererEventMap {
     'winget:log': [log: string];
     'main-process-message': [message: string];
+    'app-update:download-progress': [progress: AppUpdateDownloadProgress];
 }
 
 export interface IElectronAPI {
     invoke(channel: 'winget:check-updates'): Promise<AppUpdate[]>;
     invoke(channel: 'winget:install-update', id: string): Promise<void>;
-    invoke(channel: 'system:create-restore-point', description: string): Promise<void>;
+    invoke(channel: 'system:create-restore-point', description: string): Promise<RestorePointResult>;
     invoke(channel: 'system:open-logs'): Promise<void>;
     invoke(channel: 'system:is-elevated'): Promise<boolean>;
     invoke(channel: 'system:get-info'): Promise<SystemInfo>;
@@ -29,6 +37,8 @@ export interface IElectronAPI {
     invoke<K extends keyof SettingsMap>(channel: 'settings:set', key: K, value: SettingsMap[K]): Promise<void>;
     invoke(channel: 'system:set-operation-active', active: boolean): Promise<void>;
     invoke(channel: 'system:open-url', url: string): Promise<void>;
+    invoke(channel: 'system:check-app-update'): Promise<AppVersionCheckResult>;
+    invoke(channel: 'system:download-app-update', assetUrl: string, fileName: string): Promise<AppUpdateDownloadResult>;
     invoke(channel: 'history:get'): Promise<HistoryItem[]>;
     invoke(channel: 'history:add', entry: Omit<HistoryItem, 'date'>): Promise<void>;
     invoke(channel: 'history:clear'): Promise<void>;

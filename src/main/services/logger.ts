@@ -3,7 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 
 // Set precise log location
-const projectLogPath = path.join(app.getPath('userData'), 'app_debug.log');
+const projectLogPath = path.join(app.getPath('userData'), 'app_debug.txt');
 log.transports.file.resolvePathFn = () => projectLogPath;
 log.initialize();
 

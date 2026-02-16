@@ -12,6 +12,8 @@ const allowedInvokeChannels = new Set([
     'settings:set',
     'system:set-operation-active',
     'system:open-url',
+    'system:check-app-update',
+    'system:download-app-update',
     'history:get',
     'history:add',
     'history:clear',
@@ -19,7 +21,8 @@ const allowedInvokeChannels = new Set([
 ]);
 const allowedOnChannels = new Set([
     'winget:log',
-    'main-process-message'
+    'main-process-message',
+    'app-update:download-progress'
 ]);
 const allowedSendChannels = new Set([
     'log:info',

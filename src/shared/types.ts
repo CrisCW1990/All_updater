@@ -22,3 +22,44 @@ export interface HistoryItem {
     date: string;
     details?: string;
 }
+
+export type RestoreFailureReason =
+    | 'system-protection-disabled'
+    | 'frequency-limit'
+    | 'access-denied'
+    | 'service-unavailable'
+    | 'verification-failed'
+    | 'command-failed'
+    | 'unknown';
+
+export interface RestorePointResult {
+    success: boolean;
+    reason?: RestoreFailureReason;
+    details?: string;
+}
+
+export interface AppVersionCheckResult {
+    success: boolean;
+    offline?: boolean;
+    hasUpdate: boolean;
+    currentVersion: string;
+    latestVersion?: string;
+    releaseUrl?: string;
+    assetName?: string;
+    assetUrl?: string;
+    error?: string;
+}
+
+export interface AppUpdateDownloadProgress {
+    fileName: string;
+    downloadedBytes: number;
+    totalBytes: number;
+    percent: number | null;
+}
+
+export interface AppUpdateDownloadResult {
+    success: boolean;
+    canceled?: boolean;
+    filePath?: string;
+    error?: string;
+}

@@ -5,6 +5,7 @@ import { SettingsService, type UserSettings } from './services/settings.js';
 import { LoggerService } from './services/logger.js';
 import { SystemService } from './services/system.js';
 import { HistoryService } from './services/history.js';
+import { AppUpdateService } from './services/app-update.js';
 import type { HistoryItem } from '../shared/types.js';
 import log from 'electron-log/main'; // Import directly to access transport
 
@@ -14,6 +15,7 @@ const restoreService = new SystemRestoreService();
 const settingsService = new SettingsService();
 const logger = new LoggerService();
 const systemService = new SystemService();
+const appUpdateService = new AppUpdateService();
 
 const settingKeys: readonly (keyof UserSettings)[] = [
     'theme',
@@ -140,6 +142,16 @@ export function setupIPC() {
             throw new Error('Invalid URL protocol');
         }
         await shell.openExternal(url);
+    });
+
+    ipcMain.handle('system:check-app-update', async () => {
+        logger.info('Checking for app updates (GitHub release)...');
+        return await appUpdateService.checkLatestVersion();
+    });
+
+    ipcMain.handle('system:download-app-update', async (event, assetUrl: string, fileName: string) => {
+        logger.info(`Downloading app update asset: ${fileName}`);
+        return await appUpdateService.downloadUpdateAsset(event.sender, assetUrl, fileName);
     });
 
     // History
