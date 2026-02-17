@@ -19,6 +19,8 @@ Y opcional/recomendado:
 - `npm run build:portable:signed`: build portable + `forceCodeSigning=true`
 - `npm run signing:verify-artifact`: valida firma Authenticode del `.exe`
 - `npm run release:portable:signed`: build firmado + verificación de firma
+- `npm run build:local`: build portable **sin firma** (solo pruebas locales)
+- `npm run release:local`: alias local para build portable **sin firma** (no publicar)
 - `npm run hooks:install`: activa hooks de git del repo (`.githooks`)
 
 ## 3) Ejemplo rápido (PowerShell)
@@ -41,7 +43,6 @@ npm run hooks:install
 
 El hook `pre-push` bloqueará push a:
 
-- `refs/heads/prd`
 - `refs/tags/v*`
 
 si no detecta un artefacto firmado válido.
