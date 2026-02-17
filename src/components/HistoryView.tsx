@@ -94,7 +94,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                             <AlertCircle className="h-5 w-5" />
                         </div>
                         <div>
-                            <h4 className="font-bold text-gray-900 dark:text-white text-sm">{t('resetAppConfirm')}</h4>
+                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">{t('resetAppConfirm')}</h4>
                             <p className="text-xs text-slate-600 dark:text-slate-400">{t('resetAppMessage')}</p>
                         </div>
                     </div>
@@ -117,8 +117,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
 
             <header className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('history')}</h2>
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-400">
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white transition-colors">{t('history')}</h2>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
                         {t('historyRecord')}
                     </p>
                 </div>
@@ -179,7 +179,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                                         item.status === 'in-use' ? "bg-amber-500 border-amber-500/20 text-white" :
                                             item.status === 'inapplicable' ? "bg-amber-500 border-amber-500/20 text-white" :
                                                 item.status === 'security-error' ? "bg-orange-600 border-orange-500/20 text-white" :
-                                        "bg-red-500 border-red-500/20 text-white"
+                                                    "bg-red-500 border-red-500/20 text-white"
                             )}>
                                 {item.status === 'success' && <CheckCircle2 className="h-5 w-5" />}
                                 {item.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
@@ -192,7 +192,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
 
                             <div className="ml-16 w-full rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-300 dark:bg-white/5 dark:ring-white/10 transition-all duration-300 group-hover:shadow-md dark:group-hover:bg-white/10">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-bold text-black dark:text-white">{item.appName}</h3>
+                                    <h3 className="font-bold text-slate-900 dark:text-white truncate">{item.appName}</h3>
                                     <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-400">
                                         <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                                         {new Date(item.date).toLocaleString()}
@@ -213,7 +213,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                                                 item.status === 'in-use' ? "text-amber-600 dark:text-amber-400" :
                                                     item.status === 'inapplicable' ? "text-amber-600 dark:text-amber-400" :
                                                         item.status === 'security-error' ? "text-orange-600 dark:text-orange-400" :
-                                                "text-red-600 dark:text-red-400"
+                                                            "text-red-600 dark:text-red-400"
                                     )}>
                                         {getSatiricalStatus(item)}
                                     </span>

@@ -49,28 +49,28 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                 animate={{ scale: 1, opacity: 1, x: 0 }}
                                 exit={{ scale: 0.9, opacity: 0, x: 20 }}
                                 transition={{ type: "spring", duration: 0.5 }}
-                                className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl backdrop-blur-xl"
+                                className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900 shadow-2xl transition-colors"
                             >
-                                <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none" />
-                                <div className="relative p-8 flex flex-col items-center text-center">
-                                    <h2 className="mb-8 text-2xl font-bold text-white tracking-tight">
+                                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 flex items-center justify-center">
+                                    <h2 className="text-2xl font-bold text-white tracking-tight text-center">
                                         Select Language / Seleccione Idioma
                                     </h2>
-
+                                </div>
+                                <div className="relative p-8 flex flex-col items-center text-center">
                                     <div className="grid grid-cols-2 gap-4 w-full mb-8">
                                         <button
                                             onClick={() => handleLanguageSelect('en')}
-                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-800 p-6 border border-slate-700 hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
+                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 dark:bg-slate-800 p-6 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
                                         >
                                             <span className="text-3xl">🇺🇸</span>
-                                            <span className="text-lg font-bold text-white group-hover:text-blue-400">English</span>
+                                            <span className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400">English</span>
                                         </button>
                                         <button
                                             onClick={() => handleLanguageSelect('es')}
-                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-800 p-6 border border-slate-700 hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
+                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 dark:bg-slate-800 p-6 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
                                         >
                                             <span className="text-3xl">🇪🇸</span>
-                                            <span className="text-lg font-bold text-white group-hover:text-blue-400">Español</span>
+                                            <span className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400">Español</span>
                                         </button>
                                     </div>
 
@@ -88,25 +88,19 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                 animate={{ scale: 1, opacity: 1, x: 0 }}
                                 exit={{ scale: 0.9, opacity: 0, x: -20 }}
                                 transition={{ type: "spring", duration: 0.5 }}
-                                className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl backdrop-blur-xl"
+                                className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900 shadow-2xl transition-colors"
                             >
-                                {/* Decorative Header Background */}
-                                <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none" />
-
-                                <div className="relative p-8 flex flex-col items-center text-center">
-
-                                    {/* Icon */}
-                                    <div className="mb-6 rounded-full bg-blue-500/20 p-4 ring-1 ring-blue-500/30">
-                                        <Info className="h-10 w-10 text-blue-400" />
+                                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 flex flex-col items-center text-center">
+                                    <div className="mb-4 rounded-full bg-white/20 p-4 ring-1 ring-white/30">
+                                        <Info className="h-10 w-10 text-white" />
                                     </div>
-
-                                    {/* Title */}
-                                    <h2 className="mb-4 text-2xl font-bold text-white tracking-tight">
+                                    <h2 className="text-2xl font-bold text-white tracking-tight">
                                         {t('onboardingTitle')}
                                     </h2>
+                                </div>
 
-                                    {/* Body Text */}
-                                    <p className="mb-8 text-base text-slate-300 leading-relaxed max-w-md">
+                                <div className="relative p-8 flex flex-col items-center text-center">
+                                    <p className="mb-8 text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-md">
                                         {t('onboardingBody')}
                                     </p>
 
@@ -118,12 +112,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                         <div className={`
                                             flex h-5 w-5 items-center justify-center rounded border transition-all duration-200
                                             ${dontShowAgain
-                                                ? 'border-blue-500 bg-blue-500 text-white'
-                                                : 'border-slate-600 bg-slate-800/50 group-hover:border-slate-500'}
+                                                ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                                                : 'border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/50 group-hover:border-slate-400 dark:group-hover:border-slate-500'}
                                         `}>
                                             {dontShowAgain && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                                         </div>
-                                        <span className="text-sm font-medium text-slate-400 group-hover:text-slate-300 select-none">
+                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-300 select-none">
                                             {t('onboardingDontShow')}
                                         </span>
                                     </div>

@@ -47,11 +47,11 @@ export class PreflightService {
 
     private async checkService(serviceName: string): Promise<{ ok: boolean; detail?: string }> {
         const result = await this.runPowerShell(
-            `$svc = Get-Service -Name '${serviceName}' -ErrorAction SilentlyContinue; if ($null -eq $svc) { 'missing' } else { $svc.Status }`
+            `$svc = Get-Service -Name '${serviceName}' -ErrorAction SilentlyContinue; if ($null -eq $svc) { 'missing' } else { if ($svc.StartType -eq 'Disabled') { 'disabled' } else { $svc.Status } }`
         );
 
         const status = result.stdout.trim().toLowerCase();
-        if (status === 'running') return { ok: true };
+        if (status === 'running' || status === 'stopped') return { ok: true };
         if (!status) return { ok: false, detail: result.stderr.trim() || 'Unknown service status' };
         return { ok: false, detail: status };
     }

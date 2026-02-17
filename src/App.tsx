@@ -590,7 +590,7 @@ export default function App() {
     >
       {activeTab === 'dashboard' ? (
         <div className="mx-auto flex w-full max-w-7xl h-full flex-col gap-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('dashboard')}</h2>
               <div className="flex items-center gap-2">
@@ -607,7 +607,7 @@ export default function App() {
               {!isInstalling && !isCreatingRestore && (
                 <button
                   onClick={() => checkAppUpdate(false)}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('appUpdateCheck')}
                 >
                   <RefreshCw className={clsx("h-5 w-5", checkingAppVersion && "animate-spin")} />
@@ -624,7 +624,7 @@ export default function App() {
                 <button
                   onClick={exportDiagnostics}
                   disabled={exportingDiagnostics}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('exportDiagnostics')}
                 >
                   <FileText className={clsx("h-5 w-5", exportingDiagnostics && "animate-pulse")} />
@@ -634,7 +634,7 @@ export default function App() {
               {updates.length > 0 && !loading && !isInstalling && (
                 <button
                   onClick={checkUpdates}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('refresh')}
                 >
                   <RefreshCw className="h-5 w-5" />
@@ -642,7 +642,7 @@ export default function App() {
               )}
 
               {(isInstalling || isCreatingRestore) && (
-                <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 dark:border-blue-900/30 dark:bg-blue-900/20">
+                <div className="flex shrink-0 items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 dark:border-blue-900/30 dark:bg-blue-900/20">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400" />
                   <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                     {isCreatingRestore ? t('creatingRestore') + '...' : `${t('updatingApp')} ${installProgress?.current || 0}/${installProgress?.total || 0}`}
@@ -654,7 +654,7 @@ export default function App() {
                 <button
                   onClick={() => { void handleUpdateClick(); }}
                   disabled={selectedIds.size === 0 || runningPreflight}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:scale-105 hover:from-blue-500 hover:to-indigo-500 disabled:scale-100 disabled:opacity-50 disabled:grayscale"
+                  className="flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:scale-105 hover:from-blue-500 hover:to-indigo-500 disabled:scale-100 disabled:opacity-50 disabled:grayscale"
                 >
                   <ArrowDownToLine className={clsx("h-5 w-5", runningPreflight && "animate-pulse")} />
                   <span>{runningPreflight ? t('preflightRunning') : `${t('updateSelected')} (${selectedIds.size})`}</span>
@@ -807,7 +807,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-24">
               <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 backdrop-blur-md dark:border-white/10 dark:bg-black/20">
                 <button
                   onClick={toggleSelectAll}

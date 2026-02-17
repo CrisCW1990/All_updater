@@ -2,6 +2,7 @@
   "name": "all-updater",
   "private": true,
   "version": "1.0.3",
+  "description": "All Updater - Universal App Update Manager",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -26,10 +27,9 @@
     ],
     "win": {
       "target": [
-        "nsis",
         "portable"
       ],
-      "artifactName": "${productName}-${version}.${ext}",
+      "artifactName": "${productName}-${version}-Portable.${ext}",
       "icon": "build/icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
