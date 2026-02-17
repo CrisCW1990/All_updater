@@ -1,4 +1,6 @@
 import Store from 'electron-store';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { HistoryItem } from '../../shared/types.js';
 
 interface HistoryData {
@@ -29,12 +31,24 @@ export class HistoryService {
     constructor() {
         this.store = new Store<HistoryData>({
             schema,
-            name: 'installation-history'
+            name: 'installation-history',
+            clearInvalidConfig: true
         });
     }
 
     getHistory(): HistoryItem[] {
         return this.store.get('items');
+    }
+
+    private backupStoreFile(): void {
+        try {
+            const sourcePath = this.store.path;
+            if (!fs.existsSync(sourcePath)) return;
+            const backupPath = path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.bak.json`);
+            fs.copyFileSync(sourcePath, backupPath);
+        } catch (error) {
+            console.error('[HistoryService] Failed to backup history file:', error);
+        }
     }
 
     addEntry(entry: Omit<HistoryItem, 'date'>): void {
@@ -46,6 +60,7 @@ export class HistoryService {
         items.unshift(newEntry); // Newest first
         // Limit history to last 200 items to avoid bloat
         this.store.set('items', items.slice(0, 200));
+        this.backupStoreFile();
     }
 
     isVersionSkipped(id: string, version: string): boolean {
@@ -61,5 +76,6 @@ export class HistoryService {
 
     clearHistory(): void {
         this.store.set('items', []);
+        this.backupStoreFile();
     }
 }

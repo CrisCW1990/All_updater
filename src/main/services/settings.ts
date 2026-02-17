@@ -1,9 +1,10 @@
 import Store from 'electron-store';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export interface UserSettings {
     theme: 'dark' | 'light' | 'system';
     language: 'en' | 'es';
-    dontShowRestoreWarning: boolean;
     fontSize: 'small' | 'medium' | 'large';
     hasSeenOnboarding: boolean;
 }
@@ -18,10 +19,6 @@ const schema = {
         type: 'string',
         enum: ['en', 'es'],
         default: 'en'
-    },
-    dontShowRestoreWarning: {
-        type: 'boolean',
-        default: false
     },
     fontSize: {
         type: 'string',
@@ -38,7 +35,10 @@ export class SettingsService {
     private store: Store<UserSettings>;
 
     constructor() {
-        this.store = new Store<UserSettings>({ schema });
+        this.store = new Store<UserSettings>({
+            schema,
+            clearInvalidConfig: true
+        });
         console.log('Settings file path:', this.store.path);
     }
 
@@ -46,7 +46,19 @@ export class SettingsService {
         return this.store.get(key);
     }
 
+    private backupStoreFile(): void {
+        try {
+            const sourcePath = this.store.path;
+            if (!fs.existsSync(sourcePath)) return;
+            const backupPath = path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.bak.json`);
+            fs.copyFileSync(sourcePath, backupPath);
+        } catch (error) {
+            console.error('[SettingsService] Failed to backup settings file:', error);
+        }
+    }
+
     set<K extends keyof UserSettings>(key: K, value: UserSettings[K]): void {
         this.store.set(key, value);
+        this.backupStoreFile();
     }
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, ShieldCheck, Zap, X } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,6 +12,24 @@ interface RestoreModalProps {
 
 export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onConfirm, onSkip }) => {
     const { t } = useLanguage();
+    const confirmRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        confirmRef.current?.focus();
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onClose();
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                onConfirm();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isOpen, onClose, onConfirm]);
+
     if (!isOpen) return null;
 
     return (
@@ -64,6 +82,7 @@ export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onC
 
                             <button
                                 onClick={onConfirm}
+                                ref={confirmRef}
                                 className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-50 p-4 ring-1 ring-blue-500 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 transition-all"
                             >
                                 <ShieldCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />

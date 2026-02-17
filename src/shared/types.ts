@@ -47,6 +47,7 @@ export interface AppVersionCheckResult {
     releaseUrl?: string;
     assetName?: string;
     assetUrl?: string;
+    assetSha256?: string;
     error?: string;
 }
 
@@ -58,6 +59,29 @@ export interface AppUpdateDownloadProgress {
 }
 
 export interface AppUpdateDownloadResult {
+    success: boolean;
+    canceled?: boolean;
+    filePath?: string;
+    hashVerified?: boolean;
+    hashExpected?: string;
+    hashActual?: string;
+    error?: string;
+}
+
+export interface PreflightResult {
+    success: boolean;
+    overall: 'ok' | 'warning' | 'error';
+    checks: {
+        admin: boolean;
+        winget: boolean;
+        vssService: boolean;
+        taskScheduler: boolean;
+        restoreQuery: boolean;
+    };
+    details: Partial<Record<'admin' | 'winget' | 'vssService' | 'taskScheduler' | 'restoreQuery', string>>;
+}
+
+export interface DiagnosticsExportResult {
     success: boolean;
     canceled?: boolean;
     filePath?: string;

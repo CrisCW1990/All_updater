@@ -1,4 +1,5 @@
 import { app, dialog, type WebContents } from 'electron';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -12,6 +13,7 @@ import type {
 interface GitHubReleaseAsset {
     name: string;
     browser_download_url: string;
+    digest?: string;
 }
 
 interface GitHubReleaseResponse {
@@ -23,7 +25,8 @@ interface GitHubReleaseResponse {
 export class AppUpdateService {
     private readonly owner = 'Ixoman';
     private readonly repo = 'All_updater';
-    private readonly timeoutMs = 5000;
+    private readonly versionCheckTimeoutMs = 12000;
+    private readonly downloadTimeoutMs = 15 * 60 * 1000;
 
     private normalizeVersion(version: string): string {
         return version.trim().replace(/^v/i, '');
@@ -66,10 +69,17 @@ export class AppUpdateService {
         return assets.find(asset => /\.exe$/i.test(asset.name));
     }
 
+    private extractSha256Digest(rawDigest?: string): string | undefined {
+        if (!rawDigest) return undefined;
+        const normalized = rawDigest.trim().toLowerCase();
+        const match = normalized.match(/^sha256:([a-f0-9]{64})$/i);
+        return match?.[1];
+    }
+
     async checkLatestVersion(): Promise<AppVersionCheckResult> {
         const currentVersion = this.normalizeVersion(app.getVersion());
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+        const timer = setTimeout(() => controller.abort(), this.versionCheckTimeoutMs);
 
         try {
             const response = await fetch(
@@ -107,7 +117,8 @@ export class AppUpdateService {
                 latestVersion,
                 releaseUrl: payload.html_url,
                 assetName: asset?.name,
-                assetUrl: asset?.browser_download_url
+                assetUrl: asset?.browser_download_url,
+                assetSha256: this.extractSha256Digest(asset?.digest)
             };
         } catch (error) {
             const message = String(error);
@@ -140,10 +151,21 @@ export class AppUpdateService {
         sender.send('app-update:download-progress', progress);
     }
 
+    private async computeSha256(filePath: string): Promise<string> {
+        return await new Promise((resolve, reject) => {
+            const hash = crypto.createHash('sha256');
+            const stream = fs.createReadStream(filePath);
+            stream.on('data', (chunk) => hash.update(chunk));
+            stream.on('error', (error) => reject(error));
+            stream.on('end', () => resolve(hash.digest('hex')));
+        });
+    }
+
     async downloadUpdateAsset(
         sender: WebContents,
         assetUrl: string,
-        fileName: string
+        fileName: string,
+        expectedSha256?: string
     ): Promise<AppUpdateDownloadResult> {
         if (!assetUrl || !fileName) {
             return { success: false, error: 'Missing asset URL or filename.' };
@@ -164,7 +186,7 @@ export class AppUpdateService {
         const tempPath = `${targetPath}.part`;
 
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 120000);
+        const timer = setTimeout(() => controller.abort(), this.downloadTimeoutMs);
 
         try {
             const response = await fetch(assetUrl, {
@@ -208,7 +230,34 @@ export class AppUpdateService {
                 percent: 100
             });
 
-            return { success: true, filePath: targetPath };
+            if (expectedSha256) {
+                const actualSha256 = await this.computeSha256(targetPath);
+                const matches = actualSha256.toLowerCase() === expectedSha256.toLowerCase();
+                if (!matches) {
+                    try {
+                        fs.unlinkSync(targetPath);
+                    } catch {
+                        // Ignore cleanup errors
+                    }
+
+                    return {
+                        success: false,
+                        error: 'HashMismatch: Downloaded file hash does not match expected release hash.',
+                        hashExpected: expectedSha256,
+                        hashActual: actualSha256
+                    };
+                }
+
+                return {
+                    success: true,
+                    filePath: targetPath,
+                    hashVerified: true,
+                    hashExpected: expectedSha256,
+                    hashActual: actualSha256
+                };
+            }
+
+            return { success: true, filePath: targetPath, hashVerified: false };
         } catch (error) {
             try {
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);

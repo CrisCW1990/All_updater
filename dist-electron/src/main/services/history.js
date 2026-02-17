@@ -1,4 +1,6 @@
 import Store from 'electron-store';
+import fs from 'node:fs';
+import path from 'node:path';
 const schema = {
     items: {
         type: 'array',
@@ -21,11 +23,24 @@ export class HistoryService {
     constructor() {
         this.store = new Store({
             schema,
-            name: 'installation-history'
+            name: 'installation-history',
+            clearInvalidConfig: true
         });
     }
     getHistory() {
         return this.store.get('items');
+    }
+    backupStoreFile() {
+        try {
+            const sourcePath = this.store.path;
+            if (!fs.existsSync(sourcePath))
+                return;
+            const backupPath = path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.bak.json`);
+            fs.copyFileSync(sourcePath, backupPath);
+        }
+        catch (error) {
+            console.error('[HistoryService] Failed to backup history file:', error);
+        }
     }
     addEntry(entry) {
         const items = this.getHistory();
@@ -36,6 +51,7 @@ export class HistoryService {
         items.unshift(newEntry); // Newest first
         // Limit history to last 200 items to avoid bloat
         this.store.set('items', items.slice(0, 200));
+        this.backupStoreFile();
     }
     isVersionSkipped(id, version) {
         const items = this.getHistory();
@@ -47,5 +63,6 @@ export class HistoryService {
     }
     clearHistory() {
         this.store.set('items', []);
+        this.backupStoreFile();
     }
 }

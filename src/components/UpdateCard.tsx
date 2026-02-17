@@ -13,7 +13,15 @@ interface UpdateCardProps {
 
 export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onToggle }) => {
     const { t } = useLanguage();
-    const isUnknown = update.version === 'Unknown' || update.version === '<unknown>';
+    const normalizedInstalledVersion = update.version.trim().toLowerCase();
+    const isUnknown =
+        normalizedInstalledVersion === 'unknown' ||
+        normalizedInstalledVersion === '<unknown>' ||
+        normalizedInstalledVersion === 'desconocido' ||
+        normalizedInstalledVersion === '<desconocido>' ||
+        normalizedInstalledVersion === 'desconocida' ||
+        normalizedInstalledVersion === '<desconocida>' ||
+        normalizedInstalledVersion === '-';
     const isInapplicable = update.previousStatus === 'inapplicable';
     const isManualUninstall = update.previousDetails?.includes('Manual uninstall') || update.previousDetails?.includes('diferente');
 

@@ -77,6 +77,6 @@ All Updater requiere permisos de Administrador para gestionar Winget y crear pun
     ), o.quit();
     return;
   }
-  const { setupIPC: e } = await import("./ipc-BSiHuIZ1.js");
+  const { setupIPC: e } = await import("./ipc-BJ8uV1Zd.js");
   e(), d();
 });

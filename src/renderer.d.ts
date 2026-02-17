@@ -1,9 +1,11 @@
 import type {
     AppUpdate,
+    DiagnosticsExportResult,
     AppUpdateDownloadProgress,
     AppUpdateDownloadResult,
     AppVersionCheckResult,
     HistoryItem,
+    PreflightResult,
     RestorePointResult
 } from './shared/types';
 
@@ -15,7 +17,6 @@ interface SystemInfo {
 interface SettingsMap {
     theme: 'dark' | 'light' | 'system';
     language: 'en' | 'es';
-    dontShowRestoreWarning: boolean;
     fontSize: 'small' | 'medium' | 'large';
     hasSeenOnboarding: boolean;
 }
@@ -37,8 +38,11 @@ export interface IElectronAPI {
     invoke<K extends keyof SettingsMap>(channel: 'settings:set', key: K, value: SettingsMap[K]): Promise<void>;
     invoke(channel: 'system:set-operation-active', active: boolean): Promise<void>;
     invoke(channel: 'system:open-url', url: string): Promise<void>;
+    invoke(channel: 'system:show-item-in-folder', targetPath: string): Promise<void>;
     invoke(channel: 'system:check-app-update'): Promise<AppVersionCheckResult>;
-    invoke(channel: 'system:download-app-update', assetUrl: string, fileName: string): Promise<AppUpdateDownloadResult>;
+    invoke(channel: 'system:download-app-update', assetUrl: string, fileName: string, expectedSha256?: string): Promise<AppUpdateDownloadResult>;
+    invoke(channel: 'system:run-preflight'): Promise<PreflightResult>;
+    invoke(channel: 'system:export-diagnostics'): Promise<DiagnosticsExportResult>;
     invoke(channel: 'history:get'): Promise<HistoryItem[]>;
     invoke(channel: 'history:add', entry: Omit<HistoryItem, 'date'>): Promise<void>;
     invoke(channel: 'history:clear'): Promise<void>;

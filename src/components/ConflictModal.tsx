@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { AlertTriangle, RefreshCw, Play } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useEffect, useRef } from 'react';
 
 interface ConflictModalProps {
     appName: string;
@@ -10,6 +11,22 @@ interface ConflictModalProps {
 
 export function ConflictModal({ appName, onRetry, onSkip }: ConflictModalProps) {
     const { t } = useLanguage();
+    const retryRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        retryRef.current?.focus();
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onSkip();
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                onRetry();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onRetry, onSkip]);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -37,6 +54,7 @@ export function ConflictModal({ appName, onRetry, onSkip }: ConflictModalProps) 
                     <div className="flex flex-col gap-3 pt-2">
                         <button
                             onClick={onRetry}
+                            ref={retryRef}
                             className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-bold text-white transition-all hover:bg-blue-700 active:scale-95"
                         >
                             <RefreshCw className="h-5 w-5" />

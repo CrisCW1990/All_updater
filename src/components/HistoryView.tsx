@@ -13,6 +13,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [filter, setFilter] = useState<'all' | 'success' | 'issues' | 'reboot' | 'security'>('all');
 
     useEffect(() => {
         const loadHistory = async () => {
@@ -59,6 +60,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
             normalized === '<unknown>' ||
             normalized === 'desconocido' ||
             normalized === '<desconocido>' ||
+            normalized === 'desconocida' ||
+            normalized === '<desconocida>' ||
             normalized === '-';
 
         return isUnknown ? version : `v${version}`;
@@ -73,6 +76,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     }
 
     // History check removed to allow header rendering
+    const filteredHistory = history.filter((item) => {
+        if (filter === 'all') return true;
+        if (filter === 'success') return item.status === 'success';
+        if (filter === 'issues') return item.status === 'failed' || item.status === 'inapplicable' || item.status === 'in-use' || item.status === 'skipped';
+        if (filter === 'reboot') return item.status === 'reboot';
+        if (filter === 'security') return item.status === 'security-error';
+        return true;
+    });
 
     return (
         <div className="space-y-6 relative">
@@ -121,15 +132,45 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                 )}
             </header>
 
+            {history.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {[
+                        { id: 'all', label: t('historyFilterAll') },
+                        { id: 'success', label: t('historyFilterSuccess') },
+                        { id: 'issues', label: t('historyFilterIssues') },
+                        { id: 'reboot', label: t('historyFilterReboot') },
+                        { id: 'security', label: t('historyFilterSecurity') }
+                    ].map((option) => (
+                        <button
+                            key={option.id}
+                            onClick={() => setFilter(option.id as typeof filter)}
+                            className={clsx(
+                                "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
+                                filter === option.id
+                                    ? "border-blue-500 bg-blue-600 text-white"
+                                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                            )}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {history.length === 0 ? (
                 <div className="flex h-64 flex-col items-center justify-center space-y-4 text-slate-600 dark:text-slate-400">
                     <Clock className="h-16 w-16" />
                     <h2 className="text-xl font-bold">{t('historyEmpty')}</h2>
                     <p>{t('historyEmptySmall')}</p>
                 </div>
+            ) : filteredHistory.length === 0 ? (
+                <div className="flex h-64 flex-col items-center justify-center space-y-2 text-slate-600 dark:text-slate-400">
+                    <AlertCircle className="h-10 w-10" />
+                    <p className="text-sm font-medium">{t('historyEmptySmall')}</p>
+                </div>
             ) : (
                 <div className="relative space-y-10 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent dark:before:via-white/5">
-                    {history.map((item, idx) => (
+                    {filteredHistory.map((item, idx) => (
                         <div key={idx} className="relative flex items-start group">
                             <div className={clsx(
                                 "absolute left-0 flex h-10 w-10 items-center justify-center rounded-full border-4 transition-all duration-300",

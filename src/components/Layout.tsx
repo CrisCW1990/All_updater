@@ -3,6 +3,7 @@ import { clsx } from 'clsx';
 import { LayoutDashboard, History, Moon, Sun, Languages } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import logo from '../assets/logo.png';
+import { TroubleshootingModal } from './TroubleshootingModal';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -15,6 +16,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMode, activeTab, onTabChange }) => {
     const { language, setLanguage, t } = useLanguage();
     const [userDataPath, setUserDataPath] = React.useState<string | null>(null);
+    const [showTroubleshooting, setShowTroubleshooting] = React.useState(false);
 
     React.useEffect(() => {
         const fetchPath = async () => {
@@ -91,6 +93,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                         <code className="block w-full break-all rounded border border-blue-200 bg-white px-2 py-1.5 font-mono text-[10px] text-slate-800 transition-colors dark:border-transparent dark:bg-black/20 dark:text-slate-400">
                             {userDataPath || '...'}
                         </code>
+                        <button
+                            onClick={() => {
+                                void window.ipcRenderer.invoke('system:open-logs').catch((error) => {
+                                    console.error('Failed to open logs:', error);
+                                });
+                            }}
+                            className="mt-2 w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-white/10 dark:bg-white/5 dark:text-blue-300 dark:hover:bg-white/10"
+                        >
+                            {t('openLogs')}
+                        </button>
+                        <button
+                            onClick={() => setShowTroubleshooting(true)}
+                            className="mt-2 w-full rounded border border-slate-300 bg-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                        >
+                            {t('troubleshooting')}
+                        </button>
                     </div>
                 </div>
 
@@ -144,6 +162,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                     </div>
                 </div>
             </main>
+
+            <TroubleshootingModal
+                isOpen={showTroubleshooting}
+                onClose={() => setShowTroubleshooting(false)}
+            />
         </div>
     );
 };

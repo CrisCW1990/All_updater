@@ -6,6 +6,8 @@ import { LoggerService } from './services/logger.js';
 import { SystemService } from './services/system.js';
 import { HistoryService } from './services/history.js';
 import { AppUpdateService } from './services/app-update.js';
+import { PreflightService } from './services/preflight.js';
+import { DiagnosticsService } from './services/diagnostics.js';
 import type { HistoryItem } from '../shared/types.js';
 import log from 'electron-log/main'; // Import directly to access transport
 
@@ -16,11 +18,12 @@ const settingsService = new SettingsService();
 const logger = new LoggerService();
 const systemService = new SystemService();
 const appUpdateService = new AppUpdateService();
+const preflightService = new PreflightService();
+const diagnosticsService = new DiagnosticsService(logger);
 
 const settingKeys: readonly (keyof UserSettings)[] = [
     'theme',
     'language',
-    'dontShowRestoreWarning',
     'fontSize',
     'hasSeenOnboarding'
 ];
@@ -46,12 +49,6 @@ function setSettingSafely(key: keyof UserSettings, value: unknown): void {
         case 'fontSize':
             if (value === 'small' || value === 'medium' || value === 'large') {
                 settingsService.set('fontSize', value);
-                return;
-            }
-            break;
-        case 'dontShowRestoreWarning':
-            if (typeof value === 'boolean') {
-                settingsService.set('dontShowRestoreWarning', value);
                 return;
             }
             break;
@@ -90,7 +87,15 @@ export function setupIPC() {
     // System Restore
     ipcMain.handle('system:create-restore-point', async (_, description: string) => {
         logger.info(`Creating restore point: ${description}`);
-        return await restoreService.createRestorePoint(description);
+        const result = await restoreService.createRestorePoint(description);
+        if (result.success) {
+            logger.info('Restore point created successfully.');
+        } else {
+            logger.warn(
+                `Restore point creation failed. reason=${result.reason || 'unknown'} details=${result.details || 'n/a'}`
+            );
+        }
+        return result;
     });
 
     // Settings
@@ -144,14 +149,31 @@ export function setupIPC() {
         await shell.openExternal(url);
     });
 
+    ipcMain.handle('system:show-item-in-folder', async (_, targetPath: string) => {
+        if (!targetPath || typeof targetPath !== 'string') {
+            throw new Error('Invalid path.');
+        }
+        await shell.showItemInFolder(targetPath);
+    });
+
     ipcMain.handle('system:check-app-update', async () => {
         logger.info('Checking for app updates (GitHub release)...');
         return await appUpdateService.checkLatestVersion();
     });
 
-    ipcMain.handle('system:download-app-update', async (event, assetUrl: string, fileName: string) => {
+    ipcMain.handle('system:download-app-update', async (event, assetUrl: string, fileName: string, expectedSha256?: string) => {
         logger.info(`Downloading app update asset: ${fileName}`);
-        return await appUpdateService.downloadUpdateAsset(event.sender, assetUrl, fileName);
+        return await appUpdateService.downloadUpdateAsset(event.sender, assetUrl, fileName, expectedSha256);
+    });
+
+    ipcMain.handle('system:run-preflight', async () => {
+        logger.info('Running preflight checks...');
+        return await preflightService.run();
+    });
+
+    ipcMain.handle('system:export-diagnostics', async () => {
+        logger.info('Exporting diagnostics package...');
+        return await diagnosticsService.exportDiagnostics();
     });
 
     // History

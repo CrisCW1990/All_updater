@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { UpdateCard } from './components/UpdateCard';
 import { RestoreModal } from './components/RestoreModal';
+import { RestoreFailureModal } from './components/RestoreFailureModal';
+import { PreflightModal } from './components/PreflightModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ConflictModal } from './components/ConflictModal';
 import { HistoryView } from './components/HistoryView.tsx';
@@ -9,10 +11,11 @@ import type {
   AppUpdate,
   AppVersionCheckResult,
   HistoryItem,
+  PreflightResult,
   RestoreFailureReason,
   RestorePointResult
 } from './shared/types';
-import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText, FolderOpen } from 'lucide-react';
 import { ToastContainer, type ToastType } from './components/Toast';
 import { useLanguage } from './context/LanguageContext';
 import { clsx } from 'clsx';
@@ -37,6 +40,7 @@ export default function App() {
   const [isInstalling, setIsInstalling] = useState(false);
   const [isCreatingRestore, setIsCreatingRestore] = useState(false);
   const [conflictState, setConflictState] = useState<{ appName: string, onRetry: () => void, onSkip: () => void } | null>(null);
+  const [restoreDecisionState, setRestoreDecisionState] = useState<{ message: string, details?: string, onContinue: () => void, onCancel: () => void } | null>(null);
   const [currentInstallingApp, setCurrentInstallingApp] = useState<string | null>(null);
   const [currentLogLine, setCurrentLogLine] = useState<string | null>(null);
   const [installProgress, setInstallProgress] = useState<{ current: number, total: number } | null>(null);
@@ -52,6 +56,11 @@ export default function App() {
   const [checkingAppVersion, setCheckingAppVersion] = useState(false);
   const [downloadingAppUpdate, setDownloadingAppUpdate] = useState(false);
   const [appUpdateProgress, setAppUpdateProgress] = useState<number | null>(null);
+  const [lastDownloadedUpdatePath, setLastDownloadedUpdatePath] = useState<string | null>(null);
+  const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null);
+  const [runningPreflight, setRunningPreflight] = useState(false);
+  const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
+  const initializedRef = useRef(false);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
   const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
   const getErrorMessage = (error: unknown): string => {
@@ -89,6 +98,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const initializeApp = async () => {
       try {
         const info = await window.ipcRenderer.invoke('system:get-info');
@@ -224,11 +236,13 @@ export default function App() {
 
     setDownloadingAppUpdate(true);
     setAppUpdateProgress(0);
+    setLastDownloadedUpdatePath(null);
     try {
       const result = await window.ipcRenderer.invoke(
         'system:download-app-update',
         appUpdateInfo.assetUrl,
-        appUpdateInfo.assetName
+        appUpdateInfo.assetName,
+        appUpdateInfo.assetSha256
       );
 
       if (result.canceled) {
@@ -238,10 +252,25 @@ export default function App() {
 
       if (result.success) {
         addToast(t('appUpdateDownloadSuccess'), 'success');
+        if (result.filePath) {
+          setLastDownloadedUpdatePath(result.filePath);
+          addToast(`${t('appUpdateSavedTo')} ${result.filePath}`, 'info');
+        }
+        if (result.hashVerified) {
+          addToast(t('appUpdateHashVerified'), 'success');
+        } else {
+          addToast(t('appUpdateHashUnavailable'), 'warning');
+        }
+        const isZip = !!appUpdateInfo?.assetName && /\.zip$/i.test(appUpdateInfo.assetName);
+        addToast(isZip ? t('appUpdateAfterDownloadZip') : t('appUpdateAfterDownloadExe'), 'warning');
         return;
       }
 
       console.error('[App] App update download failed:', result.error);
+      if ((result.error || '').includes('HashMismatch')) {
+        addToast(t('appUpdateHashMismatch'), 'error');
+        return;
+      }
       addToast(t('appUpdateDownloadFailed'), 'error');
     } catch (error) {
       console.error('[App] App update download threw error:', error);
@@ -249,6 +278,30 @@ export default function App() {
     } finally {
       setDownloadingAppUpdate(false);
       setTimeout(() => setAppUpdateProgress(null), 500);
+    }
+  };
+
+  const exportDiagnostics = async () => {
+    setExportingDiagnostics(true);
+    try {
+      const result = await window.ipcRenderer.invoke('system:export-diagnostics');
+      if (result.canceled) {
+        addToast(t('exportDiagnosticsCanceled'), 'info');
+        return;
+      }
+      if (result.success) {
+        addToast(t('exportDiagnosticsSuccess'), 'success');
+        if (result.filePath) {
+          addToast(`${t('appUpdateSavedTo')} ${result.filePath}`, 'info');
+        }
+        return;
+      }
+      addToast(t('exportDiagnosticsFailed'), 'error');
+    } catch (error) {
+      console.error('[App] Failed to export diagnostics:', error);
+      addToast(t('exportDiagnosticsFailed'), 'error');
+    } finally {
+      setExportingDiagnostics(false);
     }
   };
 
@@ -321,9 +374,34 @@ export default function App() {
     }
   };
 
-  const handleUpdateClick = () => {
+  const handleUpdateClick = async () => {
     if (selectedIds.size === 0) return;
-    setShowRestoreModal(true);
+    setRunningPreflight(true);
+    try {
+      const result = await window.ipcRenderer.invoke('system:run-preflight');
+      if (!result.success || result.overall !== 'ok') {
+        setPreflightResult(result);
+        return;
+      }
+      setShowRestoreModal(true);
+    } catch (error) {
+      console.error('[App] Preflight failed unexpectedly:', error);
+      addToast(t('preflightUnexpectedFailure'), 'warning');
+      setShowRestoreModal(true);
+    } finally {
+      setRunningPreflight(false);
+    }
+  };
+
+  const askContinueWithoutRestore = (message: string, details?: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setRestoreDecisionState({
+        message,
+        details,
+        onContinue: () => resolve(true),
+        onCancel: () => resolve(false)
+      });
+    });
   };
 
   const processUpdates = async (createRestore: boolean) => {
@@ -345,13 +423,27 @@ export default function App() {
             console.error('[App] Restore point failed:', result);
             addToast(specificMessage, "error");
             setCurrentLogLine(specificMessage);
-            return; // ABORT updates
+            const continueWithoutRestore = await askContinueWithoutRestore(specificMessage, result.details);
+            setRestoreDecisionState(null);
+            if (!continueWithoutRestore) {
+              addToast(t('restoreFailedAbort'), "warning");
+              return;
+            }
+            addToast(t('restoreContinueWithoutPoint'), "warning");
           }
         } catch (e) {
           console.error("Failed to create restore point", e);
-          addToast(`${t('restoreFailedAbort')} ${t('restoreFailUnknown')}`, "error");
-          setCurrentLogLine(null);
-          return; // ABORT updates
+          const details = getErrorMessage(e);
+          const unknownMessage = t('restoreFailUnknown');
+          addToast(`${t('restoreFailedAbort')} ${unknownMessage}`, "error");
+          setCurrentLogLine(unknownMessage);
+          const continueWithoutRestore = await askContinueWithoutRestore(unknownMessage, details);
+          setRestoreDecisionState(null);
+          if (!continueWithoutRestore) {
+            setCurrentLogLine(null);
+            return;
+          }
+          addToast(t('restoreContinueWithoutPoint'), "warning");
         } finally {
           setIsCreatingRestore(false);
         }
@@ -477,6 +569,8 @@ export default function App() {
       setCurrentInstallingApp(null);
       setCurrentLogLine(null);
       setConflictState(null);
+      setRestoreDecisionState(null);
+      setPreflightResult(null);
       if (operationMarked) {
         try {
           await window.ipcRenderer.invoke('system:set-operation-active', false);
@@ -513,10 +607,27 @@ export default function App() {
               {!isInstalling && !isCreatingRestore && (
                 <button
                   onClick={() => checkAppUpdate(false)}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('appUpdateCheck')}
                 >
                   <RefreshCw className={clsx("h-5 w-5", checkingAppVersion && "animate-spin")} />
+                  <span className="text-left leading-tight">
+                    <span className="block text-[11px] font-bold">{t('appUpdateHeaderHint')}</span>
+                    <span className="block text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                      {t('appUpdateCurrent')}: {appUpdateInfo?.currentVersion ? `v${appUpdateInfo.currentVersion}` : t('unknown')}
+                    </span>
+                  </span>
+                </button>
+              )}
+
+              {!isInstalling && !isCreatingRestore && (
+                <button
+                  onClick={exportDiagnostics}
+                  disabled={exportingDiagnostics}
+                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  title={t('exportDiagnostics')}
+                >
+                  <FileText className={clsx("h-5 w-5", exportingDiagnostics && "animate-pulse")} />
                 </button>
               )}
 
@@ -541,12 +652,12 @@ export default function App() {
 
               {updates.length > 0 && !isInstalling && (
                 <button
-                  onClick={handleUpdateClick}
-                  disabled={selectedIds.size === 0}
+                  onClick={() => { void handleUpdateClick(); }}
+                  disabled={selectedIds.size === 0 || runningPreflight}
                   className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:scale-105 hover:from-blue-500 hover:to-indigo-500 disabled:scale-100 disabled:opacity-50 disabled:grayscale"
                 >
-                  <ArrowDownToLine className="h-5 w-5" />
-                  <span>{t('updateSelected')} ({selectedIds.size})</span>
+                  <ArrowDownToLine className={clsx("h-5 w-5", runningPreflight && "animate-pulse")} />
+                  <span>{runningPreflight ? t('preflightRunning') : `${t('updateSelected')} (${selectedIds.size})`}</span>
                 </button>
               )}
             </div>
@@ -579,6 +690,17 @@ export default function App() {
                       className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
                     >
                       {t('appUpdateOpenRelease')}
+                    </button>
+                  )}
+                  {lastDownloadedUpdatePath && (
+                    <button
+                      onClick={() => window.ipcRenderer.invoke('system:show-item-in-folder', lastDownloadedUpdatePath)}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        {t('appUpdateOpenFolder')}
+                      </span>
                     </button>
                   )}
                 </div>
@@ -845,6 +967,37 @@ export default function App() {
           appName={conflictState.appName}
           onRetry={conflictState.onRetry}
           onSkip={conflictState.onSkip}
+        />
+      )}
+
+      {restoreDecisionState && (
+        <RestoreFailureModal
+          isOpen={Boolean(restoreDecisionState)}
+          message={restoreDecisionState.message}
+          details={restoreDecisionState.details}
+          onContinue={() => {
+            restoreDecisionState.onContinue();
+            setRestoreDecisionState(null);
+          }}
+          onCancel={() => {
+            restoreDecisionState.onCancel();
+            setRestoreDecisionState(null);
+          }}
+        />
+      )}
+
+      {preflightResult && (
+        <PreflightModal
+          isOpen={Boolean(preflightResult)}
+          result={preflightResult}
+          onContinue={() => {
+            const canContinue = preflightResult.overall !== 'error';
+            setPreflightResult(null);
+            if (canContinue) {
+              setShowRestoreModal(true);
+            }
+          }}
+          onCancel={() => setPreflightResult(null)}
         />
       )}
 

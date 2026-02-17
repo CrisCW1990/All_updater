@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, Check } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,11 +12,25 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
     // Start at language step, then welcome
     const [step, setStep] = useState<'language' | 'welcome'>('language');
     const [dontShowAgain, setDontShowAgain] = useState(false);
+    const startRef = useRef<HTMLButtonElement>(null);
 
     const handleLanguageSelect = (lang: 'en' | 'es') => {
         setLanguage(lang);
         setStep('welcome');
     };
+
+    useEffect(() => {
+        if (step !== 'welcome') return;
+        startRef.current?.focus();
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                onClose(dontShowAgain);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [step, dontShowAgain, onClose]);
 
     return (
         <AnimatePresence>
@@ -117,6 +131,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                     {/* Button */}
                                     <button
                                         onClick={() => onClose(dontShowAgain)}
+                                        ref={startRef}
                                         className="w-full max-w-xs rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] hover:shadow-blue-500/30 active:scale-[0.98]"
                                     >
                                         {t('onboardingBtn')}

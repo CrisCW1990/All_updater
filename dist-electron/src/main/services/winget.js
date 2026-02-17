@@ -4,6 +4,7 @@ export class WingetService {
     systemService;
     historyService;
     debugWinget = process.env.ALL_UPDATER_DEBUG_WINGET === '1';
+    unknownVersionCooldownMs = 12 * 60 * 60 * 1000;
     constructor(systemService = new SystemService(), historyService) {
         this.systemService = systemService;
         this.historyService = historyService;
@@ -178,7 +179,10 @@ export class WingetService {
                     const alreadyInstalled = history.some(h => h.id === u.id &&
                         h.version === u.available &&
                         (h.status === 'success' || h.status === 'reboot'));
-                    return !alreadyInstalled;
+                    if (alreadyInstalled)
+                        return false;
+                    const temporarilySuppressed = this.isUnknownVersionTemporarilySuppressed(u.id, u.available, history);
+                    return !temporarilySuppressed;
                 })
                     .map(u => {
                     const found = history.find((h) => h.id === u.id && h.version === u.available);
@@ -228,7 +232,6 @@ export class WingetService {
             'upgrade',
             '--id', id,
             '--silent',
-            '--force',
             '--architecture', arch,
             '--include-unknown',
             '--accept-package-agreements',
@@ -255,8 +258,12 @@ export class WingetService {
                     return;
                 }
                 const code = wingetError.exitCode;
-                // 3010: Reboot required, 0x8A15001A: Reboot required
-                if (code === 3010 || code === -1978335206) {
+                const normalizedCombined = unsupportedCombined.toLowerCase();
+                // 3010/1641: common Windows reboot-required, -1978335206: winget reboot-required variant
+                if (code === 3010 ||
+                    code === 1641 ||
+                    code === -1978335206 ||
+                    /reboot required|restart required|requires reboot|requires restart|system restart|debe reiniciar|requiere reiniciar/.test(normalizedCombined)) {
                     throw new Error(`RebootRequired: The update for ${id} was installed but a system restart is required.`);
                 }
                 // 0x8A150005: App in use
@@ -476,7 +483,22 @@ export class WingetService {
             normalized === '<unknown>' ||
             normalized === 'desconocido' ||
             normalized === '<desconocido>' ||
+            normalized === 'desconocida' ||
+            normalized === '<desconocida>' ||
             normalized === '-';
+    }
+    isUnknownVersionTemporarilySuppressed(id, availableVersion, history) {
+        const cutoff = Date.now() - this.unknownVersionCooldownMs;
+        return history.some((entry) => {
+            if (entry.id !== id || entry.version !== availableVersion)
+                return false;
+            if (!['failed', 'inapplicable', 'in-use', 'security-error'].includes(entry.status))
+                return false;
+            const timestamp = Date.parse(entry.date);
+            if (!Number.isFinite(timestamp))
+                return false;
+            return timestamp >= cutoff;
+        });
     }
     isIgnorableOutputLine(line) {
         const trimmed = line.trim();

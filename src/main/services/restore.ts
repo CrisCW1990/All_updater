@@ -18,8 +18,11 @@ export class SystemRestoreService {
         }
     }
 
-    private async getLatestRestoreSequence(): Promise<number | null> {
-        const script = "$ErrorActionPreference='SilentlyContinue'; $rp = Get-ComputerRestorePoint | Sort-Object SequenceNumber -Descending | Select-Object -First 1; if ($null -eq $rp) { '' } else { $rp.SequenceNumber }";
+    private escapeSingleQuoted(text: string): string {
+        return text.replace(/'/g, "''");
+    }
+
+    private async runPowerShellScript(script: string): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
         const result = await execa('powershell', [
             '-NoProfile',
             '-NonInteractive',
@@ -27,7 +30,31 @@ export class SystemRestoreService {
             script
         ], { reject: false });
 
-        const raw = (result.stdout || '').trim();
+        return {
+            stdout: result.stdout || '',
+            stderr: result.stderr || '',
+            exitCode: result.exitCode ?? null
+        };
+    }
+
+    private async getLatestRestoreSequence(): Promise<number | null> {
+        const script = "$ErrorActionPreference='SilentlyContinue'; $rp = Get-ComputerRestorePoint | Sort-Object SequenceNumber -Descending | Select-Object -First 1 SequenceNumber; if ($null -eq $rp) { '' } else { $rp.SequenceNumber }";
+        const result = await this.runPowerShellScript(script);
+        const raw = result.stdout.trim();
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    private async findRestoreSequenceByDescription(description: string): Promise<number | null> {
+        const escapedDescription = this.escapeSingleQuoted(description);
+        const script =
+            "$ErrorActionPreference='SilentlyContinue'; " +
+            `$target = '${escapedDescription}'; ` +
+            "$rp = Get-ComputerRestorePoint | Where-Object { $_.Description -eq $target } | Sort-Object SequenceNumber -Descending | Select-Object -First 1 SequenceNumber; " +
+            "if ($null -eq $rp) { '' } else { $rp.SequenceNumber }";
+
+        const result = await this.runPowerShellScript(script);
+        const raw = result.stdout.trim();
         const parsed = Number(raw);
         return Number.isFinite(parsed) ? parsed : null;
     }
@@ -86,8 +113,10 @@ export class SystemRestoreService {
         this.writeRestoreLog(`Restore request received. Description="${description}"`);
         try {
             const beforeSequence = await this.getLatestRestoreSequence();
-            const timestamp = new Date().toLocaleString();
-            const fullDescription = `${description} (${timestamp})`;
+            this.writeRestoreLog(`Before sequence=${beforeSequence ?? 'null'}`);
+
+            const timestamp = new Date().toISOString();
+            const fullDescription = `${description} [${timestamp}]`;
             const escapedDescription = fullDescription.replace(/'/g, "''");
             const command = `Checkpoint-Computer -Description '${escapedDescription}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop`;
 
@@ -116,20 +145,19 @@ export class SystemRestoreService {
             }
 
             const afterSequence = await this.getLatestRestoreSequence();
-            const created =
-                (beforeSequence === null && afterSequence !== null) ||
-                (beforeSequence !== null && afterSequence !== null && afterSequence > beforeSequence);
+            const matchedSequence = await this.findRestoreSequenceByDescription(fullDescription);
+            const created = matchedSequence !== null;
 
             if (!created) {
                 this.writeRestoreLog(
-                    `Checkpoint returned success but no new restore point detected. before=${beforeSequence ?? 'null'} after=${afterSequence ?? 'null'}`
+                    `Checkpoint returned success but could not verify restore point by description. before=${beforeSequence ?? 'null'} after=${afterSequence ?? 'null'} matched=${matchedSequence ?? 'null'} description="${fullDescription}"`
                 );
                 const details = this.buildDetails(result.stdout || '', result.stderr || '', result.exitCode ?? null);
                 this.writeRestoreLog(`Classified restore failure reason=verification-failed details="${details}"`);
                 return { success: false, reason: 'verification-failed', details };
             }
 
-            this.writeRestoreLog(`Restore point created successfully. sequence=${afterSequence}`);
+            this.writeRestoreLog(`Restore point created successfully. matchedSequence=${matchedSequence} latestSequence=${afterSequence ?? 'null'} description="${fullDescription}"`);
 
             return { success: true };
         } catch (error) {

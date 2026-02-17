@@ -16,10 +16,16 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     useEffect(() => {
         const loadLang = async () => {
-            const saved = await window.ipcRenderer.invoke('settings:get', 'language');
-            if (saved) setLangState(saved);
+            try {
+                const saved = await window.ipcRenderer.invoke('settings:get', 'language');
+                if (saved === 'en' || saved === 'es') {
+                    setLangState(saved);
+                }
+            } catch (error) {
+                console.error('[LanguageContext] Failed to load language:', error);
+            }
         };
-        loadLang();
+        void loadLang();
     }, []);
 
     const setLanguage = (lang: Language) => {

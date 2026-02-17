@@ -53,74 +53,104 @@
 
 10. **Fallo de restore**
 - Paso: forzar error de restore.
-- Esperado: muestra toast de error y aborta batch (no instala).
+- Esperado: muestra mensaje de fallo y modal de decision:
+- si eliges `Cancelar`: aborta batch (no instala),
+- si eliges `Continuar`: instala sin restore point bajo responsabilidad del usuario.
 
-11. **Conflicto app en uso**
+11. **Log de fallo de restore en app_debug**
+- Paso: forzar error de restore y revisar `app_debug.txt`.
+- Esperado: aparece linea clara con `reason=` y `details=` para soporte tecnico.
+
+12. **Conflicto app en uso**
 - Paso: actualizar una app abierta.
 - Esperado: modal de conflicto con `Retry` o `Skip`.
 
-12. **Resultado reboot required**
+13. **Resultado reboot required**
 - Paso: simular paquete que requiere reinicio.
 - Esperado: status `reboot` en historial/resumen + recomendacion de reinicio.
 
-13. **Resultado hash mismatch**
+14. **Resultado hash mismatch**
 - Paso: simular mismatch de hash.
 - Esperado: status `security-error`, toast de seguridad, sin marcar como success.
 
-14. **Resumen final del batch**
+15. **Resumen final del batch**
 - Paso: terminar batch con mezclas de estados.
 - Esperado: mensaje correcto (success/partial/failed) y conteo consistente.
 
-15. **Historial persistente**
+16. **Historial persistente**
 - Paso: cerrar/reabrir app.
 - Esperado: historial permanece y ordenado (mas reciente primero).
 
-16. **Reset app**
+17. **Reset app**
 - Paso: `History > Reset App > Confirm`.
 - Esperado:
 - borra historial,
 - idioma vuelve a ingles,
 - onboarding vuelve a mostrarse inmediatamente (misma sesion) y tambien en el siguiente inicio.
 
-17. **Onboarding y "dont show again"**
+18. **Onboarding y "dont show again"**
 - Paso: marcar `Dont show again` y cerrar onboarding.
 - Esperado: no vuelve a mostrarse hasta reset.
 
-18. **Cambio de idioma EN/ES**
+19. **Cambio de idioma EN/ES**
 - Paso: alternar idioma en sidebar.
 - Esperado: UI traducida consistentemente (titulos, botones, modales, historial).
 
-19. **Contraste light mode**
+20. **Contraste light mode**
 - Paso: ejecutar en light mode y recorrer Dashboard/History/Modales.
 - Esperado: texto legible, badges legibles, botones con contraste correcto.
 
-20. **Dark mode sin regresion**
+21. **Dark mode sin regresion**
 - Paso: alternar a dark mode.
 - Esperado: se mantiene look actual y legibilidad.
 
-21. **Apertura de logs**
+22. **Apertura de logs**
 - Paso: ejecutar accion `Open Logs`.
 - Esperado: abre carpeta/archivo de logs sin error.
 
-22. **Winget parser sin header de tabla**
+23. **Winget parser sin header de tabla**
 - Paso: simular salida textual de Winget sin encabezado estandar pero con lineas de paquetes.
 - Esperado: la app extrae updates validos (fallback regex) o muestra error amigable, nunca crash.
 
-23. **Winget sources degradadas**
+24. **Winget sources degradadas**
 - Paso: simular error de source (ej. codigos 0x8a15005e/0x8a150001).
 - Esperado: toast de problema de fuentes (`WingetSourceIssue`) y app estable.
 
-24. **Winget viejo sin --include-unknown**
+25. **Winget viejo sin --include-unknown**
 - Paso: validar en entorno con Winget antiguo o mockear respuesta de flag no soportado.
 - Esperado: fallback automatico sin `--include-unknown` y check/install continua.
 
-25. **Persistencia de settings con error de escritura**
+26. **Persistencia de settings con error de escritura**
 - Paso: forzar fallo de `settings:set` (ruta de datos sin escritura).
 - Esperado: rollback en UI al valor anterior + aviso al usuario; sin estado inconsistente.
 
-26. **Etiqueta de version traducida en resumen**
+27. **Etiqueta de version traducida en resumen**
 - Paso: completar un batch en EN y ES.
 - Esperado: se muestra `Version` en EN y `Version`/`Version localizada` en ES (clave traducida), sin hardcode fijo en ingles.
+
+28. **Preflight previo al update**
+- Paso: click en `Update Selected`.
+- Esperado: se ejecuta preflight. Si hay advertencias, aparece modal con checks y decision. Si hay error critico, no permite continuar.
+
+29. **Exportar diagnostico**
+- Paso: usar boton `Export diagnostics`.
+- Esperado: permite elegir carpeta y genera `all-updater-diagnostics-*.txt` con snapshot + tail de logs.
+
+30. **Integridad SHA256 en update de app**
+- Paso: descargar update cuando el release tiene `digest`.
+- Esperado: valida hash. Si coincide, muestra confirmacion. Si no coincide, elimina archivo y muestra alerta de seguridad.
+
+31. **Abrir carpeta de update descargado**
+- Paso: descargar update exitosamente y usar `Open folder`.
+- Esperado: abre explorador apuntando al archivo descargado.
+
+32. **Historial con filtros**
+- Paso: cambiar filtros en historial (`All`, `Success`, `Issues`, `Reboot`, `Security`).
+- Esperado: lista se filtra correctamente sin perder datos.
+
+33. **Accesibilidad de modales**
+- Paso: abrir modales Restore/Conflict/RestoreFailure.
+- Esperado: `Enter` ejecuta accion principal, `Esc` cancela/cierra, foco inicial correcto.
 
 ## Criterios De Aceptacion
 - Ningun crash en flujo principal.
