@@ -13,7 +13,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [filter, setFilter] = useState<'all' | 'success' | 'issues' | 'reboot' | 'security'>('all');
+    const [filter, setFilter] = useState<'all' | 'success' | 'issues' | 'failed' | 'inUse' | 'inapplicable' | 'reboot' | 'security'>('all');
 
     useEffect(() => {
         const loadHistory = async () => {
@@ -80,6 +80,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
         if (filter === 'all') return true;
         if (filter === 'success') return item.status === 'success';
         if (filter === 'issues') return item.status === 'failed' || item.status === 'inapplicable' || item.status === 'in-use' || item.status === 'skipped';
+        if (filter === 'failed') return item.status === 'failed';
+        if (filter === 'inUse') return item.status === 'in-use';
+        if (filter === 'inapplicable') return item.status === 'inapplicable';
         if (filter === 'reboot') return item.status === 'reboot';
         if (filter === 'security') return item.status === 'security-error';
         return true;
@@ -88,20 +91,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     return (
         <div className="space-y-6 relative">
             {showClearConfirm && (
-                <div className="absolute top-0 right-0 left-0 z-50 flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-red-200 dark:border-red-900/50 animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center gap-3">
+                <div className="absolute top-0 right-0 left-0 z-50 flex flex-col gap-3 p-4 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-red-200 dark:border-red-900/50 animate-in fade-in slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
                             <AlertCircle className="h-5 w-5" />
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-900 dark:text-white text-sm">{t('resetAppConfirm')}</h4>
-                            <p className="text-xs text-slate-600 dark:text-slate-400">{t('resetAppMessage')}</p>
+                            <p className="text-xs text-slate-800 dark:text-sky-100">{t('resetAppMessage')}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
                             onClick={() => setShowClearConfirm(false)}
-                            className="px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-md transition-colors"
+                            className="px-3 py-1.5 text-xs font-bold text-gray-900 dark:text-sky-200 hover:bg-gray-100 dark:hover:bg-white/5 rounded-md transition-colors"
                         >
                             {t('cancel')}
                         </button>
@@ -115,10 +118,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                 </div>
             )}
 
-            <header className="flex items-center justify-between">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('history')}</h2>
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-400">
+                    <p className="text-sm font-medium text-gray-900 dark:text-sky-100">
                         {t('historyRecord')}
                     </p>
                 </div>
@@ -138,6 +141,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                         { id: 'all', label: t('historyFilterAll') },
                         { id: 'success', label: t('historyFilterSuccess') },
                         { id: 'issues', label: t('historyFilterIssues') },
+                        { id: 'failed', label: t('historyFilterFailed') },
+                        { id: 'inUse', label: t('historyFilterInUse') },
+                        { id: 'inapplicable', label: t('historyFilterInapplicable') },
                         { id: 'reboot', label: t('historyFilterReboot') },
                         { id: 'security', label: t('historyFilterSecurity') }
                     ].map((option) => (
@@ -148,7 +154,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                                 "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
                                 filter === option.id
                                     ? "border-blue-500 bg-blue-600 text-white"
-                                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                                    : "border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10"
                             )}
                         >
                             {option.label}
@@ -158,13 +164,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
             )}
 
             {history.length === 0 ? (
-                <div className="flex h-64 flex-col items-center justify-center space-y-4 text-slate-600 dark:text-slate-400">
+                <div className="flex h-64 flex-col items-center justify-center space-y-4 text-slate-800 dark:text-sky-100">
                     <Clock className="h-16 w-16" />
                     <h2 className="text-xl font-bold">{t('historyEmpty')}</h2>
                     <p>{t('historyEmptySmall')}</p>
                 </div>
             ) : filteredHistory.length === 0 ? (
-                <div className="flex h-64 flex-col items-center justify-center space-y-2 text-slate-600 dark:text-slate-400">
+                <div className="flex h-64 flex-col items-center justify-center space-y-2 text-slate-800 dark:text-sky-100">
                     <AlertCircle className="h-10 w-10" />
                     <p className="text-sm font-medium">{t('historyEmptySmall')}</p>
                 </div>
@@ -191,16 +197,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                             </div>
 
                             <div className="ml-16 w-full rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-300 dark:bg-white/5 dark:ring-white/10 transition-all duration-300 group-hover:shadow-md dark:group-hover:bg-white/10">
-                                <div className="flex items-center justify-between mb-2">
+                                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                     <h3 className="font-bold text-black dark:text-white">{item.appName}</h3>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-400">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-900 dark:text-sky-100">
                                         <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                                         {new Date(item.date).toLocaleString()}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-400">
-                                    <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-800 dark:bg-white/10 dark:text-slate-300">
+                                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-800 dark:text-sky-100">
+                                    <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-800 dark:bg-white/10 dark:text-sky-200">
                                         {item.previousVersion
                                             ? `${formatVersionValue(item.previousVersion)} -> ${formatVersionValue(item.version)}`
                                             : formatVersionValue(item.version)}
@@ -219,7 +225,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                                     </span>
                                 </div>
                                 {item.details && (
-                                    <div className="mt-3 rounded border border-slate-200 bg-slate-100 p-3 text-xs font-mono text-slate-700 overflow-x-auto dark:border-white/5 dark:bg-black/20 dark:text-slate-400">
+                                    <div className="mt-3 rounded border border-slate-200 bg-slate-100 p-3 text-xs font-mono text-slate-900 overflow-x-auto dark:border-white/5 dark:bg-black/20 dark:text-sky-100">
                                         {item.details}
                                     </div>
                                 )}

@@ -1,4 +1,6 @@
 import os from 'node:os';
+import path from 'node:path';
+import { shell } from 'electron';
 
 export interface SystemInfo {
     platform: string;
@@ -24,6 +26,24 @@ export class SystemService {
             case 'arm64': return 'arm64';
             case 'ia32': return 'x86';
             default: return process.arch;
+        }
+    }
+
+    async openSystemProtection(): Promise<void> {
+        const windowsDir = process.env.WINDIR || 'C:\\Windows';
+        const target = path.join(windowsDir, 'System32', 'SystemPropertiesProtection.exe');
+        const error = await shell.openPath(target);
+        if (error) {
+            throw new Error(error);
+        }
+    }
+
+    async openServicesConsole(): Promise<void> {
+        const windowsDir = process.env.WINDIR || 'C:\\Windows';
+        const target = path.join(windowsDir, 'System32', 'services.msc');
+        const error = await shell.openPath(target);
+        if (error) {
+            throw new Error(error);
         }
     }
 }

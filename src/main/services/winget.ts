@@ -20,11 +20,6 @@ export class WingetService {
         }
     }
 
-    private isSpanishSystemLocale(): boolean {
-        const locale = Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
-        return locale.startsWith('es');
-    }
-
     private isDisableInteractivityUnsupported(output: string): boolean {
         return /(disable-interactivity).*(unknown|unsupported|invalid|unrecognized)|unknown option.*disable-interactivity|no option named.*disable-interactivity/i.test(output);
     }
@@ -91,6 +86,9 @@ export class WingetService {
             'no se han encontrado actualizaciones',
             'no se encontraron actualizaciones disponibles',
             'no hay actualizaciones disponibles',
+            'numeros de version que no se pueden determinar',
+            'nmeros de versin que no se pueden determinar',
+            'version numbers that cannot be determined',
             'no updates found',
             'no updates available',
             'no available upgrade found',
@@ -107,6 +105,9 @@ export class WingetService {
 
         const regexChecks = [
             /no se encontr.*paquete.*coincid.*criterios? de entrada/,
+            /no se encontr.*ning.*paquete.*criterios? de entrada/,
+            /version numbers?.*cannot be determined/,
+            /nmeros? de versin.*no se pueden determinar/,
             /no installed package found matching input criteria/,
             /no packages found matching input criteria/
         ];
@@ -131,6 +132,26 @@ export class WingetService {
         return progressLikeLines.length > 0 && meaningfulTextLines.length === 0;
     }
 
+    private hasPotentialPackageLikeLine(lines: string[]): boolean {
+        return lines.some((line) => {
+            const trimmed = line.trim();
+            if (!trimmed || this.isIgnorableOutputLine(trimmed) || this.isSeparatorLine(trimmed)) return false;
+            return /\b[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+){1,}\b/.test(trimmed) || /\b[A-Z0-9]{8,}\b/.test(trimmed);
+        });
+    }
+
+    private isOutputEffectivelyEmptyOrNoise(output: string): boolean {
+        if (!output.trim()) return true;
+        if (this.containsNoUpdatesMessage(output)) return true;
+        if (this.isProgressOnlyNoise(output)) return true;
+
+        // eslint-disable-next-line no-control-regex
+        const cleaned = output.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r/g, '\n');
+        const lines = cleaned.split('\n');
+        if (this.areAllNonEmptyLinesIgnorable(lines)) return true;
+        return !this.hasPotentialPackageLikeLine(lines);
+    }
+
     async getAvailableUpdates(): Promise<AppUpdate[]> {
         try {
             this.debug('[WingetService] Starting update check...');
@@ -153,7 +174,7 @@ export class WingetService {
                 try {
                     updates = this.parseWingetOutput(textOutput);
                 } catch (parseError) {
-                    if (this.containsNoUpdatesMessage(textOutput)) {
+                    if (this.isOutputEffectivelyEmptyOrNoise(textOutput)) {
                         this.debug('[WingetService] No updates detected from text output.');
                         updates = [];
                     } else {
@@ -164,11 +185,15 @@ export class WingetService {
                         );
                         textOutput = retryResult.all;
                         retriedWithUpgrade = true;
-                        if (this.containsNoUpdatesMessage(textOutput)) {
-                            this.debug('[WingetService] No updates detected after upgrade retry.');
-                            updates = [];
-                        } else {
+                        try {
                             updates = this.parseWingetOutput(textOutput);
+                        } catch (retryParseError) {
+                            if (this.isOutputEffectivelyEmptyOrNoise(textOutput)) {
+                                this.debug('[WingetService] No updates detected after upgrade retry.');
+                                updates = [];
+                            } else {
+                                throw retryParseError;
+                            }
                         }
                     }
                 }
@@ -200,7 +225,7 @@ export class WingetService {
                         includeAll: true
                     }
                 );
-                updates = this.containsNoUpdatesMessage(retryResult.all)
+                updates = this.isOutputEffectivelyEmptyOrNoise(retryResult.all)
                     ? []
                     : this.parseWingetOutput(retryResult.all);
                 retriedWithUpgrade = true;
@@ -218,14 +243,10 @@ export class WingetService {
                         // If the installed version is unknown and this exact target version
                         // was already installed successfully, hide it in subsequent checks.
                         if (!this.isUnknownInstalledVersion(u.version)) return true;
-
-                        const alreadyInstalled = history.some(h =>
-                            h.id === u.id &&
-                            h.version === u.available &&
-                            (h.status === 'success' || h.status === 'reboot')
-                        );
-
-                        if (alreadyInstalled) return false;
+                        const latestForVersion = this.getLatestHistoryEntryForVersion(u.id, u.available, history);
+                        if (latestForVersion && (latestForVersion.status === 'success' || latestForVersion.status === 'reboot')) {
+                            return false;
+                        }
 
                         const temporarilySuppressed = this.isUnknownVersionTemporarilySuppressed(
                             u.id,
@@ -450,13 +471,19 @@ export class WingetService {
 
         for (const args of jsonArgsCandidates) {
             try {
-                const { stdout } = await this.runWingetCommandWithFallback(args, {
+                const jsonResult = await this.runWingetCommandWithFallback(args, {
                     timeout: 60000,
                     includeAll: false
                 });
-                const parsed = this.parseWingetJsonOutput(stdout);
+                const parsed = this.parseWingetJsonOutput(jsonResult.stdout);
                 if (parsed !== null) {
-                    return parsed;
+                    if (parsed.length > 0) {
+                        return parsed;
+                    }
+
+                    if (this.isOutputEffectivelyEmptyOrNoise(jsonResult.all)) {
+                        return [];
+                    }
                 }
             } catch (error) {
                 console.warn('[WingetService] JSON output parsing failed, falling back to text parser:', error);
@@ -559,6 +586,9 @@ export class WingetService {
         if (nextVersion && value === nextVersion) return false;
         if (/^\d+(?:[.\-_]\d+)+$/.test(value)) return false;
         if (/^v?\d+(?:\.\d+){1,}$/.test(value)) return false;
+        const hasDelimiter = /[._-]/.test(value);
+        const isStoreLike = /^[A-Z0-9]{8,}$/.test(value);
+        if (!hasDelimiter && !isStoreLike) return false;
         if (value.length < 2) return false;
         return true;
     }
@@ -579,14 +609,35 @@ export class WingetService {
         availableVersion: string,
         history: Array<{ id: string; version: string; status: string; date: string }>
     ): boolean {
+        const latestForVersion = this.getLatestHistoryEntryForVersion(id, availableVersion, history);
+        if (!latestForVersion) return false;
+        if (!['failed', 'inapplicable', 'in-use', 'security-error'].includes(latestForVersion.status)) return false;
+
         const cutoff = Date.now() - this.unknownVersionCooldownMs;
-        return history.some((entry) => {
-            if (entry.id !== id || entry.version !== availableVersion) return false;
-            if (!['failed', 'inapplicable', 'in-use', 'security-error'].includes(entry.status)) return false;
+        const timestamp = Date.parse(latestForVersion.date);
+        if (!Number.isFinite(timestamp)) return false;
+        return timestamp >= cutoff;
+    }
+
+    private getLatestHistoryEntryForVersion(
+        id: string,
+        version: string,
+        history: Array<{ id: string; version: string; status: string; date: string }>
+    ): { id: string; version: string; status: string; date: string } | null {
+        let latest: { id: string; version: string; status: string; date: string } | null = null;
+        let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+        for (const entry of history) {
+            if (entry.id !== id || entry.version !== version) continue;
             const timestamp = Date.parse(entry.date);
-            if (!Number.isFinite(timestamp)) return false;
-            return timestamp >= cutoff;
-        });
+            if (!Number.isFinite(timestamp)) continue;
+            if (latest === null || timestamp >= latestTimestamp) {
+                latest = entry;
+                latestTimestamp = timestamp;
+            }
+        }
+
+        return latest;
     }
 
     private isIgnorableOutputLine(line: string): boolean {
@@ -598,6 +649,18 @@ export class WingetService {
         return false;
     }
 
+    private isSeparatorLine(line: string): boolean {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        return /^-+(?:\s+-+)+$/.test(trimmed);
+    }
+
+    private areAllNonEmptyLinesIgnorable(lines: string[]): boolean {
+        const nonEmpty = lines.map(line => line.trim()).filter(Boolean);
+        if (nonEmpty.length === 0) return true;
+        return nonEmpty.every(line => this.isIgnorableOutputLine(line) || this.isSeparatorLine(line));
+    }
+
     private parseDataLinesWithRegex(lines: string[]): AppUpdate[] {
         const updates: AppUpdate[] = [];
         for (const line of lines) {
@@ -605,21 +668,57 @@ export class WingetService {
             if (this.isIgnorableOutputLine(trimmed)) continue;
 
             const match = line.match(/^(.*?)\s{2,}(\S+)\s{2,}(\S+)\s{2,}(\S+)(?:\s{2,}(\S+))?\s*$/);
-            if (!match) continue;
+            if (match) {
+                const [, rawName, rawId, rawVersion, rawAvailable, rawSource] = match;
+                const name = rawName.trim();
+                const id = rawId.trim();
+                const version = rawVersion.trim();
+                const available = rawAvailable.trim();
+                const source = rawSource?.trim() || 'winget';
 
-            const [, rawName, rawId, rawVersion, rawAvailable, rawSource] = match;
-            const name = rawName.trim();
-            const id = rawId.trim();
-            const version = rawVersion.trim();
-            const available = rawAvailable.trim();
-            const source = rawSource?.trim() || 'winget';
-
-            if (!name || !available || !this.isLikelyPackageId(id, { name, version, available })) {
+                if (!name || !available || !this.isLikelyPackageId(id, { name, version, available })) {
+                    continue;
+                }
+                updates.push({ name, id, version, available, source });
                 continue;
             }
-            updates.push({ name, id, version, available, source });
+
+            const tokenParsed = this.parseDataLineByTokens(trimmed);
+            if (tokenParsed) {
+                updates.push(tokenParsed);
+            }
         }
         return updates;
+    }
+
+    private parseDataLineByTokens(trimmedLine: string): AppUpdate | null {
+        const tokens = trimmedLine.split(/\s+/).filter(Boolean);
+        if (tokens.length < 4) return null;
+
+        const tryCandidate = (hasSource: boolean): AppUpdate | null => {
+            const minTokens = hasSource ? 5 : 4;
+            if (tokens.length < minTokens) return null;
+
+            const availableIndex = hasSource ? tokens.length - 2 : tokens.length - 1;
+            const versionIndex = hasSource ? tokens.length - 3 : tokens.length - 2;
+            const idIndex = hasSource ? tokens.length - 4 : tokens.length - 3;
+            const nameTokens = tokens.slice(0, idIndex);
+
+            if (nameTokens.length === 0) return null;
+
+            const name = nameTokens.join(' ');
+            const id = tokens[idIndex];
+            const version = tokens[versionIndex];
+            const available = tokens[availableIndex];
+            const source = hasSource ? tokens[tokens.length - 1] : 'winget';
+
+            if (!this.isLikelyPackageId(id, { name, version, available })) return null;
+            if (!available.trim()) return null;
+
+            return { name, id, version, available, source };
+        };
+
+        return tryCandidate(true) ?? tryCandidate(false);
     }
 
     private parseWingetOutput(output: string): AppUpdate[] {
@@ -629,108 +728,24 @@ export class WingetService {
         cleaned = cleaned.replace(/\r/g, '\n'); // Treat CR as new line to split progress frames
 
         const lines = cleaned.split('\n');
-        const updates: AppUpdate[] = [];
-
-        const prefersSpanish = this.isSpanishSystemLocale();
-        const idTokens = ['Id', 'ID'];
-        const versionTokens = prefersSpanish ? ['Versión', 'Version', 'Versin'] : ['Version', 'Versión', 'Versin'];
-        const availableTokens = prefersSpanish ? ['Disponible', 'Available', 'Disponble'] : ['Available', 'Disponible', 'Disponble'];
-        const sourceTokens = prefersSpanish ? ['Origen', 'Source'] : ['Source', 'Origen'];
-
-        // Find the header line - skip lines with leading garbage
-        const headerIndex = lines.findIndex(line => {
-            const trimmed = line.trim();
-            return idTokens.some(token => trimmed.includes(token)) &&
-                versionTokens.some(token => trimmed.includes(token));
-        });
-
-        this.debug('[WingetService] Header index:', headerIndex);
-        if (headerIndex >= 0) {
-            this.debug('[WingetService] Header line:', lines[headerIndex]);
-        }
-
-        if (headerIndex === -1) {
-            const noUpdates = this.containsNoUpdatesMessage(output) || output.trim() === '';
-            if (noUpdates) {
-                return [];
-            }
-
-            const parsedWithoutHeader = this.parseDataLinesWithRegex(lines);
-            if (parsedWithoutHeader.length > 0) {
-                return parsedWithoutHeader;
-            }
-
-            if (this.isProgressOnlyNoise(output)) {
-                throw new Error('WingetOutputParseError: Unparseable progress output detected.');
-            }
-
-            throw new Error('WingetOutputParseError: Could not find updates table header.');
-        }
-
-        const headerLine = lines[headerIndex];
-
-        // Helper to find start index of specific column headers
-        const findCol = (keywords: string[]) => {
-            for (const kw of keywords) {
-                const idx = headerLine.indexOf(kw);
-                if (idx !== -1) return idx;
-            }
-            return -1;
-        };
-
-        const idStart = findCol(idTokens);
-        const versionStart = findCol(versionTokens);
-        const availableStart = findCol(availableTokens);
-        const sourceStart = findCol(sourceTokens);
-
-        this.debug('[WingetService] Column positions - Id:', idStart, 'Version:', versionStart, 'Available:', availableStart, 'Source:', sourceStart);
-
-        // Fallback to dash detection if keywords are not found exactly
-        if (idStart === -1 || versionStart === -1 || availableStart === -1) {
-            const dataLines = lines.slice(headerIndex + 1);
-            return this.parseDataLinesWithRegex(dataLines);
-        }
-
-        const dataLines = lines.slice(headerIndex + 2);
-        this.debug('[WingetService] Processing', dataLines.length, 'data lines');
-
-        for (const line of dataLines) {
-            if (!line.trim() ||
-                line.includes('actualizaciones disponibles') ||
-                line.startsWith('No se han') ||
-                line.startsWith('No updates found') ||
-                line.startsWith('No applicable update found') ||
-                line.startsWith('No installed package found matching input criteria') ||
-                line.trim().startsWith('-') || // Skip separator lines
-                /^\d+\s+paquete/.test(line.trim()) || // Skip footer notes (ES)
-                /^\d+\s+package/.test(line.trim()) // Skip footer notes (EN)
-            ) {
-                this.debug('[WingetService] Skipping line:', line.substring(0, 50));
-                continue;
-            }
-
-            // Extract substrings based on header keyword positions
-            // Name is before ID
-            const name = line.substring(0, idStart).trim();
-            // ID is from idStart to start of Version
-            const id = line.substring(idStart, versionStart).trim();
-            // Current Version
-            const version = line.substring(versionStart, availableStart).trim();
-            // Available Version
-            const available = sourceStart !== -1
-                ? line.substring(availableStart, sourceStart).trim()
-                : line.substring(availableStart).trim();
-            const source = sourceStart !== -1 ? line.substring(sourceStart).trim() : 'winget';
-
-            this.debug('[WingetService] Parsed line - Name:', name, 'ID:', id, 'Version:', version, 'Available:', available);
-
-            if (name && available && this.isLikelyPackageId(id, { name, version, available })) {
-                updates.push({ name, id, version, available, source });
-            } else {
-                this.debug('[WingetService] Rejected - invalid ID');
+        const separatorIndex = lines.findIndex(line => this.isSeparatorLine(line));
+        if (separatorIndex !== -1) {
+            const dataLines = lines.slice(separatorIndex + 1);
+            const parsed = this.parseDataLinesWithRegex(dataLines);
+            if (parsed.length > 0) {
+                return parsed;
             }
         }
 
-        return updates;
+        const parsedWithoutHeader = this.parseDataLinesWithRegex(lines);
+        if (parsedWithoutHeader.length > 0) {
+            return parsedWithoutHeader;
+        }
+
+        if (this.isOutputEffectivelyEmptyOrNoise(output)) {
+            return [];
+        }
+
+        throw new Error('WingetOutputParseError: Could not parse updates table from winget output.');
     }
 }

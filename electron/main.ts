@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import path from 'path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'url'
 
 // Necessary for ESM in Electron
@@ -14,7 +15,25 @@ process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.
 if (app.isPackaged) {
     const portableBaseDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'));
     const portableDataPath = path.join(portableBaseDir, 'data');
-    app.setPath('userData', portableDataPath);
+    let userDataPath = portableDataPath;
+
+    try {
+        fs.mkdirSync(portableDataPath, { recursive: true });
+        const probePath = path.join(portableDataPath, '.all-updater-write-test');
+        fs.writeFileSync(probePath, 'ok', 'utf8');
+        fs.unlinkSync(probePath);
+    } catch (error) {
+        console.warn('[Main] Portable data folder is not writable. Falling back to roaming appData.', error);
+        try {
+            const fallbackPath = path.join(app.getPath('appData'), 'All Updater', 'data');
+            fs.mkdirSync(fallbackPath, { recursive: true });
+            userDataPath = fallbackPath;
+        } catch (fallbackError) {
+            console.warn('[Main] Roaming appData fallback is not writable. Keeping default userData path.', fallbackError);
+        }
+    }
+
+    app.setPath('userData', userDataPath);
 }
 
 // --- Refuerzo de Administrador ---

@@ -2,7 +2,7 @@ import { execa } from 'execa';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
-import type { RestoreFailureReason, RestorePointResult } from '../../shared/types';
+import type { RestoreFailureReason, RestorePointResult, RestorePointVerificationResult } from '../../shared/types';
 
 export class SystemRestoreService {
     private getRestoreLogPath(): string {
@@ -57,6 +57,30 @@ export class SystemRestoreService {
         const raw = result.stdout.trim();
         const parsed = Number(raw);
         return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    private async getRestorePointBySequence(sequenceNumber: number): Promise<{ sequenceNumber: number; description: string } | null> {
+        const script =
+            "$ErrorActionPreference='SilentlyContinue'; " +
+            `$target = ${sequenceNumber}; ` +
+            "$rp = Get-ComputerRestorePoint | Where-Object { $_.SequenceNumber -eq $target } | Select-Object -First 1 SequenceNumber, Description; " +
+            "if ($null -eq $rp) { '' } else { ConvertTo-Json -InputObject $rp -Compress }";
+
+        const result = await this.runPowerShellScript(script);
+        const raw = result.stdout.trim();
+        if (!raw) return null;
+
+        try {
+            const parsed = JSON.parse(raw) as { SequenceNumber?: unknown; Description?: unknown };
+            const sequence = Number(parsed.SequenceNumber);
+            if (!Number.isFinite(sequence)) return null;
+            return {
+                sequenceNumber: sequence,
+                description: typeof parsed.Description === 'string' ? parsed.Description : ''
+            };
+        } catch {
+            return null;
+        }
     }
 
     private normalize(text: string): string {
@@ -159,7 +183,11 @@ export class SystemRestoreService {
 
             this.writeRestoreLog(`Restore point created successfully. matchedSequence=${matchedSequence} latestSequence=${afterSequence ?? 'null'} description="${fullDescription}"`);
 
-            return { success: true };
+            return {
+                success: true,
+                sequenceNumber: matchedSequence,
+                description: fullDescription
+            };
         } catch (error) {
             console.error('[Restore] Failed to create restore point:', error);
             this.writeRestoreLog(`Restore creation threw error: ${String(error)}`);
@@ -167,6 +195,53 @@ export class SystemRestoreService {
                 success: false,
                 reason: 'unknown',
                 details: String(error)
+            };
+        }
+    }
+
+    async verifyRestorePoint(sequenceNumber: number, expectedDescription: string): Promise<RestorePointVerificationResult> {
+        this.writeRestoreLog(`Post-batch verification requested. sequence=${sequenceNumber} expectedDescription="${expectedDescription}"`);
+        try {
+            const restorePoint = await this.getRestorePointBySequence(sequenceNumber);
+            if (!restorePoint) {
+                const details = `Restore point with sequence ${sequenceNumber} not found.`;
+                this.writeRestoreLog(`Post-batch verification failed: ${details}`);
+                return {
+                    confirmed: false,
+                    sequenceNumber,
+                    expectedDescription,
+                    details
+                };
+            }
+
+            const descriptionMatches = restorePoint.description === expectedDescription;
+            if (!descriptionMatches) {
+                const details = `Sequence ${sequenceNumber} exists but description changed. expected="${expectedDescription}" actual="${restorePoint.description}"`;
+                this.writeRestoreLog(`Post-batch verification failed: ${details}`);
+                return {
+                    confirmed: false,
+                    sequenceNumber,
+                    expectedDescription,
+                    actualDescription: restorePoint.description,
+                    details
+                };
+            }
+
+            this.writeRestoreLog(`Post-batch verification confirmed. sequence=${sequenceNumber} description="${restorePoint.description}"`);
+            return {
+                confirmed: true,
+                sequenceNumber,
+                expectedDescription,
+                actualDescription: restorePoint.description
+            };
+        } catch (error) {
+            const details = `Verification threw error: ${String(error)}`;
+            this.writeRestoreLog(`Post-batch verification failed: ${details}`);
+            return {
+                confirmed: false,
+                sequenceNumber,
+                expectedDescription,
+                details
             };
         }
     }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { translations } from '../shared/translations';
 import type { Language, TranslationKey } from '../shared/translations';
@@ -13,6 +13,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [language, setLangState] = useState<Language>('en');
+    const saveAttemptRef = useRef(0);
 
     useEffect(() => {
         const loadLang = async () => {
@@ -30,8 +31,10 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     const setLanguage = (lang: Language) => {
         const previous = language;
+        const saveAttempt = ++saveAttemptRef.current;
         setLangState(lang);
         void window.ipcRenderer.invoke('settings:set', 'language', lang).catch((error) => {
+            if (saveAttempt !== saveAttemptRef.current) return;
             console.error('[LanguageContext] Failed to persist language:', error);
             setLangState(previous);
         });

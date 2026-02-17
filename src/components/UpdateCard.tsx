@@ -56,12 +56,12 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-black dark:text-gray-100">{update.name}</h3>
                         {/* Source badge */}
-                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:bg-white/10 dark:text-gray-400">
+                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-900 dark:bg-white/10 dark:text-sky-300">
                             {update.source || 'winget'}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-slate-900 dark:text-sky-300">
                         <span className="font-mono text-xs font-bold">{update.id}</span>
                     </div>
 
@@ -72,7 +72,7 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                     ) : (
                         <div className="mt-3 flex items-center gap-4 text-sm">
                             <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-500">{t('current')}</span>
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-900 dark:text-slate-500">{t('current')}</span>
                                 <span className={clsx("font-bold text-sm", isUnknown ? "text-amber-800" : "text-black dark:text-gray-300")}>
                                     {isUnknown ? (
                                         <span className="flex items-center gap-1">
@@ -83,7 +83,7 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                             </div>
                             <ArrowRight className="h-4 w-4 text-slate-500" />
                             <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-500">{t('new')}</span>
+                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-900 dark:text-slate-500">{t('new')}</span>
                                 <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{update.available}</span>
                             </div>
                         </div>

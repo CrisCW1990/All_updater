@@ -70,7 +70,7 @@ export const RestoreFailureModal: React.FC<RestoreFailureModalProps> = ({
                         </div>
 
                         {details && (
-                            <div className="rounded-lg border border-slate-300 bg-slate-100 p-3 text-xs font-mono text-slate-700 dark:border-white/10 dark:bg-black/20 dark:text-slate-400 overflow-x-auto">
+                            <div className="rounded-lg border border-slate-300 bg-slate-100 p-3 text-xs font-mono text-slate-900 dark:border-white/10 dark:bg-black/20 dark:text-sky-300 overflow-x-auto">
                                 {details}
                             </div>
                         )}
@@ -78,7 +78,7 @@ export const RestoreFailureModal: React.FC<RestoreFailureModalProps> = ({
                         <div className="grid grid-cols-2 gap-4">
                             <button
                                 onClick={onCancel}
-                                className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm font-bold text-slate-800 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                                className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm font-bold text-slate-800 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-sky-100 dark:hover:bg-white/10"
                             >
                                 {t('restoreDecisionCancel')}
                             </button>

@@ -55,7 +55,7 @@ export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onC
                     </div>
 
                     <div className="p-6 space-y-6">
-                        <p className="text-gray-700 dark:text-gray-300">
+                        <p className="text-gray-900 dark:text-gray-300">
                             {t('restoreDesc')}
                         </p>
 
@@ -73,10 +73,10 @@ export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onC
                                 onClick={onSkip}
                                 className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-100 p-4 hover:border-slate-400 hover:bg-slate-200 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 transition-all"
                             >
-                                <Zap className="h-6 w-6 text-slate-500 group-hover:text-slate-700 dark:text-gray-500 dark:group-hover:text-gray-300" />
+                                <Zap className="h-6 w-6 text-slate-500 group-hover:text-slate-900 dark:text-gray-500 dark:group-hover:text-gray-300" />
                                 <div className="text-center">
                                     <span className="block font-semibold text-slate-800 dark:text-gray-200">{t('skipUpdate')}</span>
-                                    <span className="text-xs text-slate-600 dark:text-slate-400">{t('skipRisk')}</span>
+                                    <span className="text-xs text-slate-800 dark:text-sky-300">{t('skipRisk')}</span>
                                 </div>
                             </button>
 

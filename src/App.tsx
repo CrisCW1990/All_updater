@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { UpdateCard } from './components/UpdateCard';
 import { RestoreModal } from './components/RestoreModal';
 import { RestoreFailureModal } from './components/RestoreFailureModal';
+import { RestoreVerificationAlertModal } from './components/RestoreVerificationAlertModal';
 import { PreflightModal } from './components/PreflightModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ConflictModal } from './components/ConflictModal';
@@ -13,9 +14,10 @@ import type {
   HistoryItem,
   PreflightResult,
   RestoreFailureReason,
-  RestorePointResult
+  RestorePointResult,
+  RestorePointVerificationResult
 } from './shared/types';
-import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText, FolderOpen } from 'lucide-react';
+import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText, FolderOpen, Wifi, WifiOff } from 'lucide-react';
 import { ToastContainer, type ToastType } from './components/Toast';
 import { useLanguage } from './context/LanguageContext';
 import { clsx } from 'clsx';
@@ -24,6 +26,12 @@ interface ToastItem {
   id: string;
   message: string;
   type: ToastType;
+}
+
+interface RestoreVerificationSummaryState {
+  status: 'confirmed' | 'missing' | 'unverified';
+  message: string;
+  details?: string;
 }
 
 type ThemeMode = 'dark' | 'light' | 'system';
@@ -41,6 +49,7 @@ export default function App() {
   const [isCreatingRestore, setIsCreatingRestore] = useState(false);
   const [conflictState, setConflictState] = useState<{ appName: string, onRetry: () => void, onSkip: () => void } | null>(null);
   const [restoreDecisionState, setRestoreDecisionState] = useState<{ message: string, details?: string, onContinue: () => void, onCancel: () => void } | null>(null);
+  const [restoreVerificationAlert, setRestoreVerificationAlert] = useState<{ message: string, details?: string } | null>(null);
   const [currentInstallingApp, setCurrentInstallingApp] = useState<string | null>(null);
   const [currentLogLine, setCurrentLogLine] = useState<string | null>(null);
   const [installProgress, setInstallProgress] = useState<{ current: number, total: number } | null>(null);
@@ -60,7 +69,12 @@ export default function App() {
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null);
   const [runningPreflight, setRunningPreflight] = useState(false);
   const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [restoreVerificationSummary, setRestoreVerificationSummary] = useState<RestoreVerificationSummaryState | null>(null);
   const initializedRef = useRef(false);
+  const themeSaveAttemptRef = useRef(0);
+  const historyWriteWarningShownRef = useRef(false);
+  const pendingSelectedIdsRef = useRef<Set<string> | null>(null);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
   const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
   const getErrorMessage = (error: unknown): string => {
@@ -162,13 +176,32 @@ export default function App() {
     return () => mediaQuery.removeListener(handleChange);
   }, [themeMode]);
 
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', darkMode);
+    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
+  }, [darkMode]);
+
   const toggleTheme = () => {
     const previousMode = themeMode;
     const previousDark = darkMode;
     const nextMode: ThemeMode = darkMode ? 'light' : 'dark';
+    const saveAttempt = ++themeSaveAttemptRef.current;
     setThemeMode(nextMode);
     setDarkMode(nextMode === 'dark');
     void window.ipcRenderer.invoke('settings:set', 'theme', nextMode).catch((error) => {
+      if (saveAttempt !== themeSaveAttemptRef.current) return;
       console.error('[App] Failed to persist theme:', error);
       setThemeMode(previousMode);
       setDarkMode(previousDark);
@@ -194,6 +227,18 @@ export default function App() {
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const addHistoryEntrySafely = async (entry: Omit<HistoryItem, 'date'>): Promise<void> => {
+    try {
+      await window.ipcRenderer.invoke('history:add', entry);
+    } catch (error) {
+      console.error('[App] Failed to write history entry:', error, entry);
+      if (!historyWriteWarningShownRef.current) {
+        historyWriteWarningShownRef.current = true;
+        addToast(t('historyWriteWarning'), 'warning');
+      }
+    }
   };
 
   const checkAppUpdate = async (silent = false) => {
@@ -317,7 +362,14 @@ export default function App() {
       setUpdates(available);
       // Only auto-select updates that are NOT inapplicable
       const installable = available.filter((u) => u.previousStatus !== 'inapplicable');
-      setSelectedIds(new Set(installable.map((u) => u.id)));
+      const installableIds = new Set(installable.map((u) => u.id));
+      setSelectedIds((previous) => {
+        const preserved = new Set(Array.from(previous).filter((id) => installableIds.has(id)));
+        if (preserved.size > 0 || (hasChecked && previous.size === 0)) {
+          return preserved;
+        }
+        return new Set(installable.map((u) => u.id));
+      });
       setHasChecked(true);
       setIsWingetMissing(false);
     } catch (error: unknown) {
@@ -374,8 +426,10 @@ export default function App() {
     }
   };
 
-  const handleUpdateClick = async () => {
-    if (selectedIds.size === 0) return;
+  const handleUpdateClick = async (selectedOverride?: Set<string>) => {
+    const effectiveSelected = selectedOverride ?? selectedIds;
+    if (effectiveSelected.size === 0) return;
+    pendingSelectedIdsRef.current = new Set(effectiveSelected);
     setRunningPreflight(true);
     try {
       const result = await window.ipcRenderer.invoke('system:run-preflight');
@@ -408,7 +462,19 @@ export default function App() {
     setShowRestoreModal(false);
     setIsInstalling(true);
     setBatchResults([]);
+    setRestoreVerificationSummary(null);
+    historyWriteWarningShownRef.current = false;
     let operationMarked = false;
+    let createdRestoreMeta: { sequenceNumber: number; description: string } | null = null;
+    const selectedSnapshot = pendingSelectedIdsRef.current
+      ? new Set(pendingSelectedIdsRef.current)
+      : new Set(selectedIds);
+    pendingSelectedIdsRef.current = null;
+    if (selectedSnapshot.size === 0) {
+      setIsInstalling(false);
+      addToast(t('summaryRetryNothing'), 'info');
+      return;
+    }
     try {
       await window.ipcRenderer.invoke('system:set-operation-active', true);
       operationMarked = true;
@@ -430,6 +496,11 @@ export default function App() {
               return;
             }
             addToast(t('restoreContinueWithoutPoint'), "warning");
+          } else if (typeof result.sequenceNumber === 'number' && typeof result.description === 'string') {
+            createdRestoreMeta = {
+              sequenceNumber: result.sequenceNumber,
+              description: result.description
+            };
           }
         } catch (e) {
           console.error("Failed to create restore point", e);
@@ -449,12 +520,12 @@ export default function App() {
         }
       }
 
-      const total = selectedIds.size;
+      const total = selectedSnapshot.size;
       let current = 0;
       const currentResults: HistoryItem[] = [];
       setInstallProgress({ current, total });
 
-      const queue = Array.from(selectedIds);
+      const queue = Array.from(selectedSnapshot);
 
       // Iteration using while to allow "retry" without complex index math
       let i = 0;
@@ -507,7 +578,7 @@ export default function App() {
             previousVersion: update?.version, // This is the old version
             status: 'success'
           };
-          await window.ipcRenderer.invoke('history:add', historyEntry);
+          await addHistoryEntrySafely(historyEntry);
           currentResults.push({ ...historyEntry, date: new Date().toISOString() });
 
           addToast(`${t('updateSuccess')} ${appName}`, 'success');
@@ -540,13 +611,21 @@ export default function App() {
             status,
             details: errorMessage
           };
-          await window.ipcRenderer.invoke('history:add', historyEntry);
+          await addHistoryEntrySafely(historyEntry);
           currentResults.push({ ...historyEntry, date: new Date().toISOString() });
 
           if (isInapplicable) {
             addToast(`${appName}: ${t('updateSkipped')}`, 'warning');
           } else if (isSecurity) {
             addToast(`${appName}: ${t('updateSecuritySkipped')}`, 'error');
+          } else if (isReboot) {
+            addToast(`${appName}: ${t('updateRebootPending')}`, 'warning');
+            setUpdates(prev => prev.filter(u => u.id !== id));
+            setSelectedIds(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
           } else if (isInUse) {
             addToast(`${appName}: ${t('updateInUseSkipped')}`, 'warning');
           } else {
@@ -556,6 +635,65 @@ export default function App() {
         current++;
         setInstallProgress({ current, total });
         i++;
+      }
+
+      if (createdRestoreMeta) {
+        try {
+          const verification = await window.ipcRenderer.invoke(
+            'system:verify-restore-point',
+            createdRestoreMeta.sequenceNumber,
+            createdRestoreMeta.description
+          ) as RestorePointVerificationResult;
+
+          if (!verification.confirmed) {
+            const message = t('restorePostBatchMissing');
+            const detailLines = [
+              `${t('restoreSequenceLabel')}: ${verification.sequenceNumber}`,
+              `${t('restoreExpectedDescriptionLabel')}: ${verification.expectedDescription}`
+            ];
+
+            if (verification.actualDescription) {
+              detailLines.push(`${t('restoreActualDescriptionLabel')}: ${verification.actualDescription}`);
+            }
+            if (verification.details) {
+              detailLines.push(verification.details);
+            }
+
+            setRestoreVerificationAlert({
+              message,
+              details: detailLines.join('\n')
+            });
+            setRestoreVerificationSummary({
+              status: 'missing',
+              message,
+              details: detailLines.join('\n')
+            });
+            addToast(message, 'error');
+          } else {
+            const detailLines = [
+              `${t('restoreSequenceLabel')}: ${verification.sequenceNumber}`,
+              `${t('restoreExpectedDescriptionLabel')}: ${verification.expectedDescription}`
+            ];
+            if (verification.actualDescription) {
+              detailLines.push(`${t('restoreActualDescriptionLabel')}: ${verification.actualDescription}`);
+            }
+            setRestoreVerificationSummary({
+              status: 'confirmed',
+              message: t('restorePostBatchConfirmed'),
+              details: detailLines.join('\n')
+            });
+          }
+        } catch (verificationError) {
+          const message = t('restorePostBatchUnverified');
+          const details = getErrorMessage(verificationError);
+          setRestoreVerificationAlert({ message, details });
+          setRestoreVerificationSummary({
+            status: 'unverified',
+            message,
+            details
+          });
+          addToast(message, 'warning');
+        }
       }
 
       setBatchResults(currentResults);
@@ -581,6 +719,36 @@ export default function App() {
     }
   };
 
+  const retryFailedFromSummary = async () => {
+    const retryableStatuses = new Set(['failed', 'in-use', 'inapplicable', 'security-error']);
+    const availableIds = new Set(updates.map((u) => u.id));
+    const retryIds = batchResults
+      .filter((item) => retryableStatuses.has(item.status))
+      .map((item) => item.id)
+      .filter((id) => availableIds.has(id));
+
+    if (retryIds.length === 0) {
+      addToast(t('summaryRetryNothing'), 'info');
+      return;
+    }
+
+    setSelectedIds(new Set(retryIds));
+    setShowSummary(false);
+    await handleUpdateClick(new Set(retryIds));
+  };
+
+  const summaryTotal = batchResults.length;
+  const summaryFailedCount = batchResults.filter(
+    r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
+  ).length;
+  const retryableStatuses = new Set(['failed', 'in-use', 'inapplicable', 'security-error']);
+  const availableUpdateIds = new Set(updates.map((u) => u.id));
+  const retryableSummaryIds = batchResults
+    .filter((r) => retryableStatuses.has(r.status))
+    .map((r) => r.id)
+    .filter((id) => availableUpdateIds.has(id));
+  const hasRetryableSummaryItems = retryableSummaryIds.length > 0;
+
   return (
     <Layout
       darkMode={darkMode}
@@ -590,30 +758,40 @@ export default function App() {
     >
       {activeTab === 'dashboard' ? (
         <div className="mx-auto flex w-full max-w-7xl h-full flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('dashboard')}</h2>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-400">{t('manageApps')}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-slate-900 dark:text-sky-100">{t('manageApps')}</p>
                 {systemInfo && (
                   <span className="flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
                     {systemInfo.arch} • {systemInfo.locale}
                   </span>
                 )}
+                <span className={clsx(
+                  "flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border",
+                  isOnline
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300"
+                )}>
+                  {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+                  {isOnline ? t('networkOnline') : t('networkOffline')}
+                </span>
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:gap-3">
               {!isInstalling && !isCreatingRestore && (
                 <button
                   onClick={() => checkAppUpdate(false)}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  disabled={!isOnline || checkingAppVersion}
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('appUpdateCheck')}
                 >
                   <RefreshCw className={clsx("h-5 w-5", checkingAppVersion && "animate-spin")} />
                   <span className="text-left leading-tight">
                     <span className="block text-[11px] font-bold">{t('appUpdateHeaderHint')}</span>
-                    <span className="block text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                    <span className="block text-[10px] font-medium text-slate-800 dark:text-sky-100">
                       {t('appUpdateCurrent')}: {appUpdateInfo?.currentVersion ? `v${appUpdateInfo.currentVersion}` : t('unknown')}
                     </span>
                   </span>
@@ -624,7 +802,7 @@ export default function App() {
                 <button
                   onClick={exportDiagnostics}
                   disabled={exportingDiagnostics}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('exportDiagnostics')}
                 >
                   <FileText className={clsx("h-5 w-5", exportingDiagnostics && "animate-pulse")} />
@@ -634,7 +812,7 @@ export default function App() {
               {updates.length > 0 && !loading && !isInstalling && (
                 <button
                   onClick={checkUpdates}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('refresh')}
                 >
                   <RefreshCw className="h-5 w-5" />
@@ -668,15 +846,15 @@ export default function App() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-blue-900 dark:text-blue-300">{t('appUpdateAvailable')}</p>
-                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <p className="text-xs font-medium text-slate-900 dark:text-sky-200">
                     {t('appUpdateCurrent')}: v{appUpdateInfo.currentVersion} • {t('appUpdateLatest')}: v{appUpdateInfo.latestVersion}
                   </p>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                  <p className="text-[11px] text-slate-800 dark:text-sky-100">
                     {t('appUpdatePrivacyNote')}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={downloadAppUpdate}
                     disabled={downloadingAppUpdate || !appUpdateInfo.assetUrl || !appUpdateInfo.assetName}
@@ -687,7 +865,7 @@ export default function App() {
                   {appUpdateInfo.releaseUrl && (
                     <button
                       onClick={() => window.ipcRenderer.invoke('system:open-url', appUpdateInfo.releaseUrl!)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10"
                     >
                       {t('appUpdateOpenRelease')}
                     </button>
@@ -695,7 +873,7 @@ export default function App() {
                   {lastDownloadedUpdatePath && (
                     <button
                       onClick={() => window.ipcRenderer.invoke('system:show-item-in-folder', lastDownloadedUpdatePath)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10"
                     >
                       <span className="inline-flex items-center gap-1">
                         <FolderOpen className="h-3.5 w-3.5" />
@@ -714,7 +892,7 @@ export default function App() {
                       style={{ width: `${appUpdateProgress ?? 0}%` }}
                     />
                   </div>
-                  <p className="mt-1 text-[11px] font-medium text-slate-700 dark:text-slate-400">
+                  <p className="mt-1 text-[11px] font-medium text-slate-900 dark:text-sky-100">
                     {appUpdateProgress !== null
                       ? `${t('appUpdateDownloading')} ${appUpdateProgress}%`
                       : t('appUpdateDownloading')}
@@ -731,8 +909,8 @@ export default function App() {
                 <XCircle className="relative h-24 w-24 text-red-500" strokeWidth={1} />
               </div>
               <div className="max-w-md space-y-2">
-                <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{t('wingetMissing')}</h3>
-                <p className="text-slate-700 dark:text-slate-400">
+                <h3 className="text-2xl font-bold text-black dark:text-white">{t('wingetMissing')}</h3>
+                <p className="text-slate-900 dark:text-sky-100">
                   {t('wingetMissingDesc')}
                 </p>
                 <button
@@ -758,7 +936,7 @@ export default function App() {
                 <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 dark:from-blue-400 dark:to-indigo-400 animate-pulse transition-all">
                   {t('checking')}...
                 </h3>
-                <p className="text-black dark:text-slate-300 font-bold max-w-xs mx-auto leading-relaxed text-lg">
+                <p className="text-black dark:text-sky-200 font-bold max-w-xs mx-auto leading-relaxed text-lg">
                   {t('scanningBody')}
                 </p>
               </div>
@@ -771,7 +949,7 @@ export default function App() {
               </div>
               <div className="max-w-md space-y-2">
                 <h3 className="text-2xl font-bold text-black dark:text-white">{t('readyTitle')}</h3>
-              <p className="font-medium text-slate-700 dark:text-slate-400">{t('readyDesc')}</p>
+              <p className="font-medium text-slate-900 dark:text-sky-100">{t('readyDesc')}</p>
               </div>
               <button
                 onClick={checkUpdates}
@@ -780,7 +958,7 @@ export default function App() {
                 <RefreshCw className="h-6 w-6 transition-transform group-hover:rotate-180" />
                 {t('checkUpdates')}
               </button>
-              <p className="text-xl sm:text-2xl mt-8 font-bold text-slate-700 dark:text-slate-400 animate-in fade-in slide-in-from-top-2 duration-700 delay-300 max-w-2xl px-4 leading-relaxed">
+              <p className="text-xl sm:text-2xl mt-8 font-bold text-slate-900 dark:text-sky-100 animate-in fade-in slide-in-from-top-2 duration-700 delay-300 max-w-2xl px-4 leading-relaxed">
                 {t('footerLove')} <span className="text-blue-600 dark:text-blue-400">Samuel</span>.
                 <br />
                 {t('footerAI')}
@@ -798,7 +976,7 @@ export default function App() {
                 <CheckCircle className="relative h-24 w-24 text-emerald-600 dark:text-emerald-500" strokeWidth={1} />
               </div>
               <h3 className="text-2xl font-bold text-black dark:text-white">{t('allClean')}</h3>
-              <p className="font-medium text-slate-700 dark:text-slate-400 text-lg">{t('allCleanDesc')}</p>
+              <p className="font-medium text-slate-900 dark:text-sky-100 text-lg">{t('allCleanDesc')}</p>
               <button
                 onClick={checkUpdates}
                 className="mt-4 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
@@ -808,10 +986,10 @@ export default function App() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 backdrop-blur-md dark:border-white/10 dark:bg-black/20">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 backdrop-blur-md dark:border-white/10 dark:bg-black/20">
                 <button
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-3 text-sm font-medium text-slate-700 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
+                  className="flex items-center gap-3 text-sm font-medium text-slate-900 hover:text-blue-600 dark:text-sky-200 dark:hover:text-blue-400"
                 >
                   {allSelectableSelected ? (
                     <CheckSquare className="h-5 w-5 text-blue-500" />
@@ -820,7 +998,7 @@ export default function App() {
                   )}
                   <span>{t('selectAll')}</span>
                 </button>
-                <span className="text-sm font-medium text-slate-500">
+                <span className="text-sm font-medium text-slate-900 dark:text-sky-100">
                   {updates.length} {t('updatesAvailable')}
                 </span>
               </div>
@@ -856,10 +1034,10 @@ export default function App() {
       {showSummary && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md transition-all p-4">
           <div className="w-full max-w-xl rounded-3xl bg-white p-8 shadow-2xl dark:bg-slate-800 border border-black/10 dark:border-white/10 max-h-[80vh] flex flex-col">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{t('summaryTitle')}</h3>
-                <p className="text-slate-700 dark:text-slate-400">{t('summaryDesc')}</p>
+                <p className="text-slate-900 dark:text-sky-100">{t('summaryDesc')}</p>
               </div>
               <button
                 onClick={() => {
@@ -875,27 +1053,49 @@ export default function App() {
             <div className="flex-1 overflow-y-auto space-y-4 pr-2">
               {/* Logic for summary message */}
               {(() => {
-                const total = batchResults.length;
-                const failed = batchResults.filter(
-                  r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
-                ).length;
-
                 let message = t('summarySuccess');
 
-                if (failed === total) {
+                if (summaryFailedCount === summaryTotal) {
                   message = t('summaryFailed'); // Or use specific "inapplicable" one if needed
-                } else if (failed > 0) {
+                } else if (summaryFailedCount > 0) {
                   message = t('summaryPartial');
                 }
 
                 return (
                   <div className="mb-4 rounded-2xl border border-slate-300 bg-slate-100 p-6 dark:border-white/10 dark:bg-white/5">
-                    <p className="text-xl text-slate-700 dark:text-slate-200 italic text-center font-medium leading-relaxed">
+                    <p className="text-xl text-slate-900 dark:text-sky-100 italic text-center font-medium leading-relaxed">
                       {message}
                     </p>
                   </div>
                 );
               })()}
+
+              {restoreVerificationSummary && (
+                <div className={clsx(
+                  "rounded-2xl border p-4",
+                  restoreVerificationSummary.status === 'confirmed'
+                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-900/20"
+                    : restoreVerificationSummary.status === 'missing'
+                      ? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20"
+                      : "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20"
+                )}>
+                  <p className={clsx(
+                    "text-sm font-bold",
+                    restoreVerificationSummary.status === 'confirmed'
+                      ? "text-emerald-800 dark:text-emerald-300"
+                      : restoreVerificationSummary.status === 'missing'
+                        ? "text-red-800 dark:text-red-300"
+                        : "text-amber-800 dark:text-amber-300"
+                  )}>
+                    {restoreVerificationSummary.message}
+                  </p>
+                  {restoreVerificationSummary.details && (
+                    <p className="mt-2 whitespace-pre-wrap text-xs font-mono text-slate-900 dark:text-sky-100">
+                      {restoreVerificationSummary.details}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {batchResults.map((res, i) => (
                 <div key={i} className="flex items-center gap-4 rounded-2xl border border-slate-300 bg-slate-100 p-4 dark:border-white/5 dark:bg-white/5">
@@ -917,10 +1117,10 @@ export default function App() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-slate-900 dark:text-white truncate">{res.appName}</h4>
-                    <p className="text-[10px] text-slate-700 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">
+                    <p className="text-[10px] text-slate-900 dark:text-sky-100 font-bold uppercase tracking-wider mb-1">
                       {t('versionLabel')} {res.version}
                     </p>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 italic font-medium">
+                    <p className="text-xs text-slate-900 dark:text-sky-100 italic font-medium">
                       {res.status === 'success' ? t('statusSuccess') :
                         res.status === 'reboot' ? t('statusReboot') :
                           res.status === 'in-use' ? t('statusInUse') :
@@ -942,20 +1142,37 @@ export default function App() {
               )}
             </div>
 
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              {hasRetryableSummaryItems && (
+                <button
+                  onClick={() => { void retryFailedFromSummary(); }}
+                  className="rounded-2xl border border-amber-300 bg-amber-50 py-3 text-sm font-bold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                >
+                  {t('summaryRetryFailed')}
+                </button>
+              )}
+              <button
+                onClick={exportDiagnostics}
+                disabled={exportingDiagnostics}
+                className={clsx(
+                  "rounded-2xl border py-3 text-sm font-bold transition-colors",
+                  exportingDiagnostics
+                    ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-500"
+                    : "border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-sky-100 dark:hover:bg-white/10"
+                )}
+              >
+                {exportingDiagnostics ? `${t('exportDiagnostics')}...` : t('summaryExportDiagnostics')}
+              </button>
+            </div>
+
             <button
               onClick={() => {
                 setShowSummary(false);
                 checkUpdates();
               }}
-              className="mt-8 w-full rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-700 dark:hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98]"
+              className="mt-3 w-full rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-700 dark:hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98]"
             >
-              {(() => {
-                const total = batchResults.length;
-                const failed = batchResults.filter(
-                  r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
-                ).length;
-                return failed === total ? t('thanksNothing') : t('closeSuccess');
-              })()}
+              {summaryFailedCount === summaryTotal ? t('thanksNothing') : t('closeSuccess')}
             </button>
           </div>
         </div>
@@ -986,6 +1203,15 @@ export default function App() {
         />
       )}
 
+      {restoreVerificationAlert && (
+        <RestoreVerificationAlertModal
+          isOpen={Boolean(restoreVerificationAlert)}
+          message={restoreVerificationAlert.message}
+          details={restoreVerificationAlert.details}
+          onClose={() => setRestoreVerificationAlert(null)}
+        />
+      )}
+
       {preflightResult && (
         <PreflightModal
           isOpen={Boolean(preflightResult)}
@@ -995,9 +1221,14 @@ export default function App() {
             setPreflightResult(null);
             if (canContinue) {
               setShowRestoreModal(true);
+            } else {
+              pendingSelectedIdsRef.current = null;
             }
           }}
-          onCancel={() => setPreflightResult(null)}
+          onCancel={() => {
+            pendingSelectedIdsRef.current = null;
+            setPreflightResult(null);
+          }}
         />
       )}
 
@@ -1006,7 +1237,10 @@ export default function App() {
 
       <RestoreModal
         isOpen={showRestoreModal}
-        onClose={() => setShowRestoreModal(false)}
+        onClose={() => {
+          pendingSelectedIdsRef.current = null;
+          setShowRestoreModal(false);
+        }}
         onConfirm={() => processUpdates(true)}
         onSkip={() => processUpdates(false)}
       />
@@ -1020,7 +1254,7 @@ export default function App() {
             </div>
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">{t('creatingRestore')}</h3>
-              <p className="text-slate-600 dark:text-slate-400 max-w-xs">
+              <p className="text-slate-800 dark:text-sky-100 max-w-xs">
                 {t('restoreWait')}
               </p>
             </div>
@@ -1037,7 +1271,7 @@ export default function App() {
             </div>
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">{t('installingUpdates')}</h3>
-              <p className="text-slate-600 dark:text-slate-400 max-w-xs font-medium">
+              <p className="text-slate-800 dark:text-sky-100 max-w-xs font-medium">
                 {t('updatingApp')} <span className="text-blue-600 dark:text-blue-400">{currentInstallingApp}</span>
               </p>
               {currentLogLine && (
@@ -1046,7 +1280,7 @@ export default function App() {
                 </p>
               )}
             </div>
-            <div className="h-1.5 w-64 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+            <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
               <div
                 className="h-full bg-blue-600 transition-all duration-500 dark:bg-blue-500"
                 style={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}

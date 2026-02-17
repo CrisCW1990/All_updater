@@ -159,7 +159,7 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({ isOp
                                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">{item.title}</h3>
                                 <ul className="space-y-1">
                                     {item.steps.map((step) => (
-                                        <li key={step} className="text-xs text-slate-700 dark:text-slate-400">- {step}</li>
+                                        <li key={step} className="text-xs text-slate-900 dark:text-sky-300">- {step}</li>
                                     ))}
                                 </ul>
                             </div>
@@ -170,7 +170,7 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({ isOp
                         <button
                             onClick={onClose}
                             ref={closeRef}
-                            className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                            className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-sky-100 dark:hover:bg-white/10"
                         >
                             {t('troubleshootingClose')}
                         </button>

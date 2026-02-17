@@ -1,5 +1,10 @@
 # React + TypeScript + Vite
 
+## Release hardening
+
+- SmartScreen + code signing guide: `SIGNING_SMARTSCREEN.md`
+- Install git hooks once: `npm run hooks:install`
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

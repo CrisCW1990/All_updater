@@ -89,10 +89,27 @@ export function setupIPC() {
         logger.info(`Creating restore point: ${description}`);
         const result = await restoreService.createRestorePoint(description);
         if (result.success) {
-            logger.info('Restore point created successfully.');
+            logger.info(
+                `Restore point created successfully. sequence=${result.sequenceNumber ?? 'n/a'} description="${result.description ?? 'n/a'}"`
+            );
         } else {
             logger.warn(
                 `Restore point creation failed. reason=${result.reason || 'unknown'} details=${result.details || 'n/a'}`
+            );
+        }
+        return result;
+    });
+
+    ipcMain.handle('system:verify-restore-point', async (_, sequenceNumber: number, description: string) => {
+        logger.info(`Verifying restore point after batch. sequence=${sequenceNumber} description="${description}"`);
+        const result = await restoreService.verifyRestorePoint(sequenceNumber, description);
+        if (result.confirmed) {
+            logger.info(
+                `Restore point still confirmed after batch. sequence=${result.sequenceNumber} description="${result.actualDescription || description}"`
+            );
+        } else {
+            logger.warn(
+                `Restore point could not be confirmed after batch. sequence=${sequenceNumber} description="${description}" details=${result.details || 'n/a'}`
             );
         }
         return result;
@@ -154,6 +171,14 @@ export function setupIPC() {
             throw new Error('Invalid path.');
         }
         await shell.showItemInFolder(targetPath);
+    });
+
+    ipcMain.handle('system:open-system-restore', async () => {
+        await systemService.openSystemProtection();
+    });
+
+    ipcMain.handle('system:open-services-console', async () => {
+        await systemService.openServicesConsole();
     });
 
     ipcMain.handle('system:check-app-update', async () => {

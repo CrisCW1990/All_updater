@@ -41,7 +41,7 @@ export function ConflictModal({ appName, onRetry, onSkip }: ConflictModalProps) 
                 </div>
 
                 <div className="p-6 space-y-4">
-                    <p className="text-slate-700 dark:text-slate-300">
+                    <p className="text-slate-900 dark:text-sky-200">
                         {t('conflictBody').replace('{app}', appName)}
                     </p>
 
@@ -63,7 +63,7 @@ export function ConflictModal({ appName, onRetry, onSkip }: ConflictModalProps) 
 
                         <button
                             onClick={onSkip}
-                            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 active:scale-95"
+                            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 font-medium text-slate-900 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-sky-200 dark:hover:bg-slate-700 active:scale-95"
                         >
                             <Play className="h-5 w-5" />
                             {t('skip')}
