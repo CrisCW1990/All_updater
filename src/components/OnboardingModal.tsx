@@ -52,22 +52,22 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                 className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 shadow-2xl backdrop-blur-xl"
                             >
                                 <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none" />
-                                <div className="relative p-8 flex flex-col items-center text-center">
-                                    <h2 className="mb-8 text-2xl font-bold text-white tracking-tight">
+                                <div className="relative p-5 sm:p-8 flex flex-col items-center text-center">
+                                    <h2 className="mb-6 sm:mb-8 text-xl sm:text-2xl font-bold text-white tracking-tight">
                                         Select Language / Seleccione Idioma
                                     </h2>
 
-                                    <div className="grid grid-cols-2 gap-4 w-full mb-8">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full mb-6 sm:mb-8">
                                         <button
                                             onClick={() => handleLanguageSelect('en')}
-                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-800 p-6 border border-slate-700 hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
+                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-800 p-4 sm:p-6 border border-slate-700 hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
                                         >
                                             <span className="text-3xl">🇺🇸</span>
                                             <span className="text-lg font-bold text-white group-hover:text-blue-400">English</span>
                                         </button>
                                         <button
                                             onClick={() => handleLanguageSelect('es')}
-                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-800 p-6 border border-slate-700 hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
+                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-800 p-4 sm:p-6 border border-slate-700 hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
                                         >
                                             <span className="text-3xl">🇪🇸</span>
                                             <span className="text-lg font-bold text-white group-hover:text-blue-400">Español</span>
@@ -93,7 +93,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                 {/* Decorative Header Background */}
                                 <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none" />
 
-                                <div className="relative p-8 flex flex-col items-center text-center">
+                                <div className="relative p-5 sm:p-8 flex flex-col items-center text-center">
 
                                     {/* Icon */}
                                     <div className="mb-6 rounded-full bg-blue-500/20 p-4 ring-1 ring-blue-500/30">
@@ -101,12 +101,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                     </div>
 
                                     {/* Title */}
-                                    <h2 className="mb-4 text-2xl font-bold text-white tracking-tight">
+                                    <h2 className="mb-4 text-xl sm:text-2xl font-bold text-white tracking-tight">
                                         {t('onboardingTitle')}
                                     </h2>
 
                                     {/* Body Text */}
-                                    <p className="mb-8 text-base text-slate-300 leading-relaxed max-w-md">
+                                    <p className="mb-6 sm:mb-8 text-sm sm:text-base text-slate-300 leading-relaxed max-w-md">
                                         {t('onboardingBody')}
                                     </p>
 

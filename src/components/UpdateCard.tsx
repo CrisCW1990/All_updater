@@ -39,7 +39,7 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                         : "cursor-pointer border-slate-300 bg-white hover:border-blue-500 hover:bg-slate-50 dark:border-white/5 dark:bg-black/20 dark:hover:border-white/10 dark:hover:bg-black/30"
             )}
         >
-            <div className="flex items-center gap-4">
+            <div className="flex min-w-0 items-center gap-4">
                 {/* Checkbox Area */}
                 <div className={clsx(
                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-all",
@@ -52,17 +52,17 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                     {isInapplicable ? <AlertCircle className="h-4 w-4" /> : <Check className="h-4 w-4" strokeWidth={3} />}
                 </div>
 
-                <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-black dark:text-gray-100">{update.name}</h3>
+                <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                        <h3 className="truncate pr-1 text-lg font-bold text-black dark:text-gray-100">{update.name}</h3>
                         {/* Source badge */}
-                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-900 dark:bg-white/10 dark:text-sky-300">
+                        <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-900 dark:bg-white/10 dark:text-sky-300">
                             {update.source || 'winget'}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-slate-900 dark:text-sky-300">
-                        <span className="font-mono text-xs font-bold">{update.id}</span>
+                    <div className="mt-1 flex min-w-0 items-center gap-2 text-sm text-slate-900 dark:text-sky-300">
+                        <span className="font-mono text-xs font-bold break-all">{update.id}</span>
                     </div>
 
                     {isInapplicable ? (
@@ -70,7 +70,7 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                             {isManualUninstall ? t('updateManualUninstall') : t('updateInapplicable')}
                         </div>
                     ) : (
-                        <div className="mt-3 flex items-center gap-4 text-sm">
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm sm:flex-nowrap sm:gap-4">
                             <div className="flex flex-col">
                                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-900 dark:text-slate-500">{t('current')}</span>
                                 <span className={clsx("font-bold text-sm", isUnknown ? "text-amber-800" : "text-black dark:text-gray-300")}>

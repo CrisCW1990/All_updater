@@ -68,7 +68,7 @@ export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onC
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2 sm:gap-4">
                             <button
                                 onClick={onSkip}
                                 className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-100 p-4 hover:border-slate-400 hover:bg-slate-200 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 transition-all"

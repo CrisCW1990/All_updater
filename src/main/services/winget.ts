@@ -303,6 +303,57 @@ export class WingetService {
         }
     }
 
+    private emitWingetOutputToLog(rawChunk: string, onLog?: (log: string) => void): void {
+        if (!onLog) return;
+        const lines = rawChunk
+            .split(/\r?\n|\r/g)
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        for (const line of lines) {
+            onLog(line);
+        }
+    }
+
+    private buildWingetErrorCombinedText(error: { message?: string; stdout?: string; stderr?: string }): string {
+        return `${error.message || ''}\n${error.stdout || ''}\n${error.stderr || ''}`;
+    }
+
+    private async hasObsRelatedProcessRunning(): Promise<boolean> {
+        try {
+            const { stdout } = await execa(
+                'powershell',
+                [
+                    '-NoProfile',
+                    '-NonInteractive',
+                    '-Command',
+                    "$names=@('obs64','obs32','obs-browser-page','obs-ffmpeg-mux','obs-webrtc-mux'); " +
+                    "$running=Get-Process -Name $names -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName -Unique; " +
+                    "if($running){$running -join ','}"
+                ],
+                { reject: false, timeout: 10000 }
+            );
+            return stdout.trim().length > 0;
+        } catch {
+            // Fail-open to avoid false negatives on systems where process query is restricted.
+            return true;
+        }
+    }
+
+    private async shouldTreatFileInUseAsRunningApp(id: string): Promise<boolean> {
+        if (id !== 'OBSProject.OBSStudio') {
+            return true;
+        }
+
+        const obsRunning = await this.hasObsRelatedProcessRunning();
+        if (!obsRunning) {
+            console.warn('[WingetService] OBS in-use signal received, but no OBS process was detected.');
+            return false;
+        }
+
+        return true;
+    }
+
     async installUpdate(id: string, onLog?: (log: string) => void): Promise<void> {
         this.debug(`[WingetService] Installing update: ${id}`);
         const arch = this.systemService.getWingetArch();
@@ -318,20 +369,30 @@ export class WingetService {
         ];
 
         const runCmd = async (args: string[]) => {
-            const subprocess = execa('winget', args);
+            const subprocess = execa('winget', args, { all: true });
 
-            if (onLog && subprocess.stdout) {
-                subprocess.stdout.on('data', (data) => {
-                    const line = data.toString().trim();
-                    if (line) onLog(line);
+            if (subprocess.all) {
+                subprocess.all.on('data', (data) => {
+                    this.emitWingetOutputToLog(data.toString(), onLog);
                 });
+            } else {
+                if (subprocess.stdout) {
+                    subprocess.stdout.on('data', (data) => {
+                        this.emitWingetOutputToLog(data.toString(), onLog);
+                    });
+                }
+                if (subprocess.stderr) {
+                    subprocess.stderr.on('data', (data) => {
+                        this.emitWingetOutputToLog(data.toString(), onLog);
+                    });
+                }
             }
 
             try {
                 await subprocess;
             } catch (error: unknown) {
                 const wingetError = error as { exitCode?: number, message?: string, stdout?: string, stderr?: string };
-                const unsupportedCombined = `${wingetError.message || ''}\n${wingetError.stdout || ''}\n${wingetError.stderr || ''}`;
+                const unsupportedCombined = this.buildWingetErrorCombinedText(wingetError);
                 if (args.includes('--include-unknown') && this.isIncludeUnknownUnsupported(unsupportedCombined)) {
                     console.warn(`[WingetService] --include-unknown unsupported for ${id}. Retrying without it...`);
                     await runCmd(args.filter(arg => arg !== '--include-unknown'));
@@ -350,6 +411,10 @@ export class WingetService {
                 }
                 // 0x8A150005: App in use
                 if (code === -1978335227) {
+                    const shouldTreatAsRunningApp = await this.shouldTreatFileInUseAsRunningApp(id);
+                    if (!shouldTreatAsRunningApp) {
+                        throw new Error(`FileLockDetected: ${id} installer reported file lock, but no related process was detected.`);
+                    }
                     throw new Error(`AppInUse: Could not update ${id} because it is currently running.`);
                 }
                 throw error;
@@ -363,36 +428,28 @@ export class WingetService {
                 exitCode?: number;
                 message?: string;
                 stdout?: string;
+                stderr?: string;
             };
+            const combinedErrorText = this.buildWingetErrorCombinedText(wingetError);
+            const normalizedCombined = combinedErrorText.toLowerCase();
             // Check for inapplicability or other common Winget "not found" quirks
             const isInapplicable =
-                (wingetError.message || '').includes('Inapplicable') ||
-                wingetError.stdout?.includes('No se ha encontrado ninguna actualización aplicable') ||
-                wingetError.stdout?.includes('No se encontró ningún paquete') ||
-                wingetError.stdout?.includes('No applicable update found') ||
-                wingetError.stdout?.includes('No update needed') ||
+                /inapplicable|no se ha encontrado ninguna actualizaci[oó]n aplicable|no se encontr[oó] ning[uú]n paquete|no applicable update found|no update needed/i.test(combinedErrorText) ||
                 wingetError.exitCode === -1978335221;
 
             const isTechMismatch =
                 wingetError.exitCode === 2316632107 ||
                 wingetError.exitCode === -1978335189 ||
-                wingetError.stdout?.includes('tecnología de instalación es diferente') ||
-                wingetError.stdout?.includes('installation technology is different');
+                /tecnolog[ií]a de instalaci[oó]n es diferente|installation technology is different/i.test(combinedErrorText);
 
             // NEW: Hash Mismatch (0x8a150011 / 2316632081)
             const isHashMismatch =
                 wingetError.exitCode === 2316632081 ||
-                wingetError.stdout?.includes('Installer hash does not match') ||
-                wingetError.stdout?.includes('El hash del instalador no coincide');
+                /installer hash does not match|el hash del instalador no coincide/i.test(combinedErrorText);
 
-            // NEW: File in Use (Exit Code 6 or specific text)
-            // Note: Exit Code 6 is generic "handle invalid", but in context of installers often means in use.
+            // File-in-use must rely on explicit signal text (exit code 6 is too generic and causes false positives).
             const isFileInUse =
-                wingetError.exitCode === 6 ||
-                wingetError.stdout?.includes('Files modified by the installer are currently in use') ||
-                wingetError.stdout?.includes('Otra aplicación está usando los archivos modificados') ||
-                wingetError.stdout?.includes('File in use') ||
-                wingetError.stdout?.includes('Archivo en uso');
+                /files modified by the installer are currently in use|otra aplicación está usando los archivos modificados|otra aplicacion esta usando los archivos modificados|file in use|archivo en uso|application is currently running|aplicaci[oó]n.*(en uso|ejecuci[oó]n)/i.test(normalizedCombined);
 
             if (isHashMismatch) {
                 console.warn(`[WingetService] Hash mismatch for ${id}. Security risk.`);
@@ -400,6 +457,10 @@ export class WingetService {
             }
 
             if (isFileInUse) {
+                const shouldTreatAsRunningApp = await this.shouldTreatFileInUseAsRunningApp(id);
+                if (!shouldTreatAsRunningApp) {
+                    throw new Error(`FileLockDetected: ${id} installer reported file lock, but no related process was detected.`);
+                }
                 console.warn(`[WingetService] File in use for ${id}.`);
                 throw new Error(`AppInUse: The application is currently running. Please close it.`);
             }

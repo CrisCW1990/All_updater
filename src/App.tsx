@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { UpdateCard } from './components/UpdateCard';
 import { RestoreModal } from './components/RestoreModal';
@@ -35,6 +35,42 @@ interface RestoreVerificationSummaryState {
 }
 
 type ThemeMode = 'dark' | 'light' | 'system';
+type AppProgressMode = 'real' | 'estimated';
+
+const parsePercentFromWingetLog = (logLine: string): number | null => {
+  const matches = Array.from(logLine.matchAll(/(^|[^0-9])([0-9]{1,3})%(?![0-9])/g));
+  if (matches.length === 0) return null;
+  const raw = Number(matches[matches.length - 1][2]);
+  if (!Number.isFinite(raw)) return null;
+  return Math.max(0, Math.min(100, raw));
+};
+
+const normalizeWingetLog = (value: string): string => (
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+);
+
+const parseEstimatedPercentFromWingetLog = (logLine: string): number | null => {
+  const normalized = normalizeWingetLog(logLine);
+  const phaseRules: Array<{ percent: number, regex: RegExp }> = [
+    { percent: 12, regex: /\bstarting|iniciando|initializing|inicializando\b/ },
+    { percent: 28, regex: /\bdownloading|download|descargando|descarga|transferring|transfer\b/ },
+    { percent: 45, regex: /\bextract|unpack|decompress|descomprim|expandiendo\b/ },
+    { percent: 70, regex: /\binstalling|install|instaland|aplicando|applying|executing|ejecutando\b/ },
+    { percent: 84, regex: /\bverifying|verify|verificando|verificar|hash|checksum\b/ },
+    { percent: 95, regex: /\bfinalizing|finalizando|completing|completion|completado|completed|done|hecho|terminado|installed successfully|instalado correctamente\b/ }
+  ];
+
+  for (const rule of phaseRules) {
+    if (rule.regex.test(normalized)) {
+      return rule.percent;
+    }
+  }
+
+  return null;
+};
 
 export default function App() {
   const { t } = useLanguage();
@@ -52,6 +88,8 @@ export default function App() {
   const [restoreVerificationAlert, setRestoreVerificationAlert] = useState<{ message: string, details?: string } | null>(null);
   const [currentInstallingApp, setCurrentInstallingApp] = useState<string | null>(null);
   const [currentLogLine, setCurrentLogLine] = useState<string | null>(null);
+  const [currentAppProgress, setCurrentAppProgress] = useState<number | null>(null);
+  const [currentAppProgressMode, setCurrentAppProgressMode] = useState<AppProgressMode | null>(null);
   const [installProgress, setInstallProgress] = useState<{ current: number, total: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [showSummary, setShowSummary] = useState(false);
@@ -75,6 +113,7 @@ export default function App() {
   const themeSaveAttemptRef = useRef(0);
   const historyWriteWarningShownRef = useRef(false);
   const pendingSelectedIdsRef = useRef<Set<string> | null>(null);
+  const estimatedProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
   const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
   const getErrorMessage = (error: unknown): string => {
@@ -101,15 +140,52 @@ export default function App() {
     return true;
   };
 
+  const stopEstimatedAppProgress = useCallback(() => {
+    if (estimatedProgressTimerRef.current !== null) {
+      clearInterval(estimatedProgressTimerRef.current);
+      estimatedProgressTimerRef.current = null;
+    }
+  }, []);
+
+  const startEstimatedAppProgress = useCallback(() => {
+    stopEstimatedAppProgress();
+    setCurrentAppProgressMode('estimated');
+    estimatedProgressTimerRef.current = setInterval(() => {
+      setCurrentAppProgress((prev) => {
+        if (prev === null) return 3;
+        if (prev >= 92) return prev;
+        const step = prev < 25 ? 3 : prev < 55 ? 2 : 1;
+        return Math.min(prev + step, 92);
+      });
+    }, 1200);
+  }, [stopEstimatedAppProgress]);
+
   useEffect(() => {
     const handleLog = (_event: unknown, log: string) => {
       const cleanLog = log.replace(/\[#+ -+\]/g, '').trim();
-      if (cleanLog) setCurrentLogLine(cleanLog);
+      if (!cleanLog) return;
+      setCurrentLogLine(cleanLog);
+      const realPercent = parsePercentFromWingetLog(cleanLog);
+      if (realPercent !== null) {
+        stopEstimatedAppProgress();
+        setCurrentAppProgressMode('real');
+        setCurrentAppProgress((prev) => Math.max(prev ?? 0, realPercent));
+        return;
+      }
+
+      const estimatedPercent = parseEstimatedPercentFromWingetLog(cleanLog);
+      if (estimatedPercent !== null) {
+        setCurrentAppProgressMode((prev) => prev === 'real' ? prev : 'estimated');
+        setCurrentAppProgress((prev) => Math.max(prev ?? 0, estimatedPercent));
+      }
     };
 
     window.ipcRenderer.on('winget:log', handleLog);
-    return () => window.ipcRenderer.off('winget:log', handleLog);
-  }, []);
+    return () => {
+      window.ipcRenderer.off('winget:log', handleLog);
+      stopEstimatedAppProgress();
+    };
+  }, [stopEstimatedAppProgress]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -537,6 +613,10 @@ export default function App() {
 
         try {
           setCurrentInstallingApp(appName);
+          setCurrentLogLine(null);
+          setCurrentAppProgress(3);
+          setCurrentAppProgressMode('estimated');
+          startEstimatedAppProgress();
 
           // Wait for conflict resolution if needed
           let retry = true;
@@ -582,6 +662,9 @@ export default function App() {
           currentResults.push({ ...historyEntry, date: new Date().toISOString() });
 
           addToast(`${t('updateSuccess')} ${appName}`, 'success');
+          stopEstimatedAppProgress();
+          setCurrentAppProgressMode('real');
+          setCurrentAppProgress(100);
 
           setUpdates(prev => prev.filter(u => u.id !== id));
           setSelectedIds(prev => {
@@ -596,6 +679,7 @@ export default function App() {
           const isReboot = errorMessage.includes('RebootRequired');
           const isInUse = errorMessage.includes('AppInUse');
           const isSecurity = errorMessage.includes('HashMismatch');
+          const isFileLockDetected = errorMessage.includes('FileLockDetected');
 
           let status: 'failed' | 'inapplicable' | 'reboot' | 'in-use' | 'security-error' = 'failed';
           if (isInapplicable) status = 'inapplicable';
@@ -628,12 +712,17 @@ export default function App() {
             });
           } else if (isInUse) {
             addToast(`${appName}: ${t('updateInUseSkipped')}`, 'warning');
+          } else if (isFileLockDetected) {
+            addToast(`${appName}: ${t('updateFileLockDetected')}`, 'warning');
           } else {
             addToast(`${t('updateFailed')} ${appName}`, 'error');
           }
         }
         current++;
         setInstallProgress({ current, total });
+        stopEstimatedAppProgress();
+        setCurrentAppProgress(null);
+        setCurrentAppProgressMode(null);
         i++;
       }
 
@@ -701,11 +790,14 @@ export default function App() {
         setShowSummary(true);
       }
     } finally {
+      stopEstimatedAppProgress();
       setIsInstalling(false);
       setIsCreatingRestore(false);
       setInstallProgress(null);
       setCurrentInstallingApp(null);
       setCurrentLogLine(null);
+      setCurrentAppProgress(null);
+      setCurrentAppProgressMode(null);
       setConflictState(null);
       setRestoreDecisionState(null);
       setPreflightResult(null);
@@ -748,6 +840,7 @@ export default function App() {
     .map((r) => r.id)
     .filter((id) => availableUpdateIds.has(id));
   const hasRetryableSummaryItems = retryableSummaryIds.length > 0;
+  const hasAppUpdateBanner = Boolean(appUpdateInfo?.success && appUpdateInfo.hasUpdate);
 
   return (
     <Layout
@@ -758,7 +851,7 @@ export default function App() {
     >
       {activeTab === 'dashboard' ? (
         <div className="mx-auto flex w-full max-w-7xl h-full flex-col gap-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('dashboard')}</h2>
               <div className="flex flex-wrap items-center gap-2">
@@ -780,12 +873,12 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-2 sm:gap-3">
-              {!isInstalling && !isCreatingRestore && (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              {!isInstalling && !isCreatingRestore && !hasAppUpdateBanner && (
                 <button
                   onClick={() => checkAppUpdate(false)}
                   disabled={!isOnline || checkingAppVersion}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex w-full items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('appUpdateCheck')}
                 >
                   <RefreshCw className={clsx("h-5 w-5", checkingAppVersion && "animate-spin")} />
@@ -802,17 +895,18 @@ export default function App() {
                 <button
                   onClick={exportDiagnostics}
                   disabled={exportingDiagnostics}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('exportDiagnostics')}
                 >
                   <FileText className={clsx("h-5 w-5", exportingDiagnostics && "animate-pulse")} />
+                  <span className="text-xs font-semibold">{t('exportDiagnosticsAction')}</span>
                 </button>
               )}
 
               {updates.length > 0 && !loading && !isInstalling && (
                 <button
                   onClick={checkUpdates}
-                  className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-900 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 sm:w-auto dark:border-white/10 dark:bg-white/5 dark:text-sky-200 dark:hover:bg-white/10 dark:hover:text-blue-400"
                   title={t('refresh')}
                 >
                   <RefreshCw className="h-5 w-5" />
@@ -832,7 +926,7 @@ export default function App() {
                 <button
                   onClick={() => { void handleUpdateClick(); }}
                   disabled={selectedIds.size === 0 || runningPreflight}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:scale-105 hover:from-blue-500 hover:to-indigo-500 disabled:scale-100 disabled:opacity-50 disabled:grayscale"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:scale-105 hover:from-blue-500 hover:to-indigo-500 disabled:scale-100 disabled:opacity-50 disabled:grayscale sm:w-auto"
                 >
                   <ArrowDownToLine className={clsx("h-5 w-5", runningPreflight && "animate-pulse")} />
                   <span>{runningPreflight ? t('preflightRunning') : `${t('updateSelected')} (${selectedIds.size})`}</span>
@@ -1280,11 +1374,35 @@ export default function App() {
                 </p>
               )}
             </div>
-            <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-              <div
-                className="h-full bg-blue-600 transition-all duration-500 dark:bg-blue-500"
-                style={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}
-              />
+            <div className="w-full max-w-xs space-y-3">
+              <div>
+                <p className="mb-1 text-[11px] font-semibold text-slate-700 dark:text-sky-100">
+                  {t('appProgress')}: {currentAppProgress !== null ? `${currentAppProgress}%` : t('unknown')}
+                  {currentAppProgress !== null && currentAppProgressMode === 'estimated' ? ` (${t('estimatedLabel')})` : ''}
+                </p>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                  {currentAppProgress !== null ? (
+                    <div
+                      className="h-full bg-blue-600 transition-all duration-300 dark:bg-blue-500"
+                      style={{ width: `${currentAppProgress}%` }}
+                    />
+                  ) : (
+                    <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-500/70 dark:bg-blue-400/70" />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[11px] font-semibold text-slate-700 dark:text-sky-100">
+                  {t('batchProgress')}: {installProgress?.current || 0}/{installProgress?.total || 0}
+                </p>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                  <div
+                    className="h-full bg-indigo-600 transition-all duration-500 dark:bg-indigo-500"
+                    style={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

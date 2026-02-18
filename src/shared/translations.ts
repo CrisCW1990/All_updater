@@ -28,7 +28,7 @@ export const translations = {
         networkOffline: "Offline",
         settingsSaveWarning: "Could not save this preference. Previous value restored.",
         appUpdateCheck: "Check app update",
-        appUpdateHeaderHint: "Click here to update app",
+        appUpdateHeaderHint: "Check All Updater update",
         appUpdateAvailable: "New app version available",
         appUpdateCurrent: "Current",
         appUpdateLatest: "Latest",
@@ -51,6 +51,7 @@ export const translations = {
         appUpdateMissingAsset: "No downloadable portable file found in the latest release.",
         appUpdatePrivacyNote: "Optional check via GitHub Releases only. No personal data is sent.",
         exportDiagnostics: "Export diagnostics",
+        exportDiagnosticsAction: "Export diagnostics ZIP",
         exportDiagnosticsSuccess: "Diagnostics exported successfully.",
         exportDiagnosticsFailed: "Could not export diagnostics.",
         exportDiagnosticsCanceled: "Diagnostics export canceled.",
@@ -81,6 +82,7 @@ export const translations = {
         updateSkipped: "skipped: No applicable update found",
         updateSecuritySkipped: "skipped: Security verification failed",
         updateInUseSkipped: "skipped: Application was in use",
+        updateFileLockDetected: "installer reported file lock but no running app was detected. Retry or reboot, then try again",
         updateRebootPending: "installed, but Windows requires a reboot to finalize it",
         updateInapplicable: "Not needed right now",
         updateInapplicableDesc: "The installer indicated this version is not applicable to your device.",
@@ -170,6 +172,9 @@ export const translations = {
         restoreWait: "This usually takes about 30-60 seconds. Taking a safety snapshot before we start.",
         installingUpdates: "Installing Updates",
         updatingApp: "Updating",
+        appProgress: "Current app progress",
+        batchProgress: "Batch progress",
+        estimatedLabel: "Estimated",
 
         // Summary Modal
         summaryTitle: "Post-Update Report",
@@ -227,7 +232,7 @@ export const translations = {
 
         // Onboarding
         onboardingTitle: "Welcome to All Updater",
-        onboardingBody: "I help you update your INSTALLED applications (Browsers, Discord, Steam, etc.). I am NOT Windows Update and I do not touch your operating system. Everything happens locally.",
+        onboardingBody: "I help you to update your INSTALLED applications (Browsers, Discord, Steam, etc.). I am NOT Windows Update and I do not touch your operating system. Everything happens locally.",
         onboardingBtn: "Get Started",
         onboardingDontShow: "Do not show again",
         onboardingLangTitle: "Select Language",
@@ -260,7 +265,7 @@ export const translations = {
         networkOffline: "Sin conexión",
         settingsSaveWarning: "No se pudo guardar esta preferencia. Se restauró el valor anterior.",
         appUpdateCheck: "Revisar actualización de la app",
-        appUpdateHeaderHint: "Haz clic aquí para actualizar la app",
+        appUpdateHeaderHint: "Revisar actualización de All Updater",
         appUpdateAvailable: "Nueva versión de la app disponible",
         appUpdateCurrent: "Actual",
         appUpdateLatest: "Última",
@@ -283,6 +288,7 @@ export const translations = {
         appUpdateMissingAsset: "No se encontró archivo portable descargable en el último release.",
         appUpdatePrivacyNote: "Verificación opcional vía GitHub Releases. No se envían datos personales.",
         exportDiagnostics: "Exportar diagnóstico",
+        exportDiagnosticsAction: "Exportar diagnóstico ZIP",
         exportDiagnosticsSuccess: "Diagnóstico exportado correctamente.",
         exportDiagnosticsFailed: "No se pudo exportar el diagnóstico.",
         exportDiagnosticsCanceled: "Exportación de diagnóstico cancelada.",
@@ -313,6 +319,7 @@ export const translations = {
         updateSkipped: "omitido: No se encontró actualización aplicable",
         updateSecuritySkipped: "omitido: Falló la verificación de seguridad",
         updateInUseSkipped: "omitido: La aplicación estaba en uso",
+        updateFileLockDetected: "el instalador reportó bloqueo de archivos pero no se detectó la app en ejecución. Reintenta o reinicia y vuelve a intentar",
         updateRebootPending: "instalada, pero Windows requiere reiniciar para finalizarla",
         updateInapplicable: "Por ahora no necesitas esta versión",
         updateInapplicableDesc: "El instalador ha determinado que esta actualización no aplica a tu sistema actual.",
@@ -402,6 +409,9 @@ export const translations = {
         restoreWait: "Suele tardar 30-60 segundos. Sacando una fotito al sistema antes de empezar.",
         installingUpdates: "Instalando Actualizaciones",
         updatingApp: "Actualizando",
+        appProgress: "Progreso de la app actual",
+        batchProgress: "Progreso del lote",
+        estimatedLabel: "Estimado",
 
         // Summary Modal
         summaryTitle: "Informe Post-Actualización",
