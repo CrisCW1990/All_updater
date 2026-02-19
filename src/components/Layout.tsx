@@ -1,6 +1,6 @@
 import React from 'react';
 import { clsx } from 'clsx';
-import { LayoutDashboard, History, Moon, Sun, Languages } from 'lucide-react';
+import { LayoutDashboard, History, Moon, Sun, Languages, Info, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import logo from '../assets/logo.png';
 import { TroubleshootingModal } from './TroubleshootingModal';
@@ -31,133 +31,143 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
     }, []);
 
     return (
-        <div className={clsx("flex h-screen w-full overflow-hidden transition-colors duration-300 font-sans selection:bg-blue-500/30", darkMode ? "dark bg-slate-950 text-white" : "bg-slate-50 text-slate-950")}>
+        <div className={clsx(
+            "flex h-screen w-full overflow-hidden transition-colors duration-500 font-sans selection:bg-md-primary/30",
+            darkMode ? "dark bg-[#1a1c1e] text-[#e2e2e6]" : "bg-[#fdfcff] text-[#1a1c1e]"
+        )}>
 
-            {/* Ambient Background */}
-            <div className="fixed inset-0 z-0 pointer-events-none">
-                <div className="absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full bg-purple-500/10 blur-[120px] dark:bg-purple-900/20" />
-                <div className="absolute bottom-[-20%] right-[-10%] h-[600px] w-[600px] rounded-full bg-blue-500/10 blur-[120px] dark:bg-blue-900/20" />
+            {/* Ambient Background - Subtle M3 Surfaces */}
+            <div className="fixed inset-0 z-0 pointer-events-none opacity-50">
+                <div className="absolute top-[-10%] left-[-5%] h-[500px] w-[500px] rounded-full bg-md-primary/5 blur-[120px]" />
+                <div className="absolute bottom-[-10%] right-[-5%] h-[500px] w-[500px] rounded-full bg-md-secondary/5 blur-[120px]" />
             </div>
 
-            {/* Sidebar */}
-            <aside className="relative z-20 flex w-64 flex-col border-r border-slate-300 bg-white/90 backdrop-blur-xl dark:border-white/5 dark:bg-black/20">
-                <div className="flex h-16 items-center gap-3 px-6 border-b border-slate-200 dark:border-white/5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20 overflow-hidden">
+            {/* Sidebar - M3 Standard Navigation Drawer (Surface Container Low) */}
+            <aside className="relative z-20 flex w-80 flex-col bg-md-surface-container-low px-4 py-6 transition-colors duration-300">
+                <div className="flex items-center gap-4 px-4 mb-10">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-md-primary text-md-on-primary shadow-lg overflow-hidden shrink-0">
                         <img src={logo} alt="Logo" className="h-full w-full object-cover" />
                     </div>
-                    <h1 className="text-lg font-bold tracking-tight text-black dark:text-gray-100 transition-colors">All Updater</h1>
+                    <div>
+                        <h1 className="text-xl font-bold tracking-tight text-md-on-surface">All Updater</h1>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-md-primary opacity-90">Digital Overlord</p>
+                    </div>
                 </div>
 
-                <nav className="flex-1 space-y-1 p-4">
+                <nav className="flex-1 space-y-2">
                     <button
                         onClick={() => onTabChange('dashboard')}
                         className={clsx(
-                            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200",
+                            "flex w-full items-center gap-4 rounded-full px-6 py-4 text-sm font-bold transition-all duration-300",
                             activeTab === 'dashboard'
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:shadow-none"
-                                : "text-slate-900 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-white/5"
-                        )}
-                    >
-                        <LayoutDashboard className="h-4 w-4" />
+                                ? "bg-md-secondary-container text-md-on-secondary-container shadow-sm"
+                                : "text-md-on-surface-variant hover:bg-md-surface-container-highest hover:text-md-on-surface"
+                        )}>
+                        <LayoutDashboard className="h-5 w-5" />
                         {t('dashboard')}
                     </button>
 
                     <button
                         onClick={() => onTabChange('history')}
                         className={clsx(
-                            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200",
+                            "flex w-full items-center gap-4 rounded-full px-6 py-4 text-sm font-bold transition-all duration-300",
                             activeTab === 'history'
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:shadow-none"
-                                : "text-slate-900 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-white/5"
-                        )}
-                    >
-                        <History className="h-4 w-4" />
+                                ? "bg-md-secondary-container text-md-on-secondary-container shadow-sm"
+                                : "text-md-on-surface-variant hover:bg-md-surface-container-highest hover:text-md-on-surface"
+                        )}>
+                        <History className="h-5 w-5" />
                         {t('history')}
                     </button>
 
-                    <div className="px-3 py-2">
-                        <div className="h-px w-full bg-slate-300 dark:bg-white/5" />
+                    <div className="my-6 px-4">
+                        <div className="h-px w-full bg-md-outline-variant/20" />
                     </div>
 
+                    <button
+                        onClick={() => setShowTroubleshooting(true)}
+                        className="flex w-full items-center gap-4 rounded-full px-6 py-4 text-sm font-bold text-md-on-surface-variant hover:bg-md-surface-container-highest hover:text-md-on-surface transition-all duration-300"
+                    >
+                        <Info className="h-5 w-5" />
+                        {t('troubleshooting')}
+                    </button>
                 </nav>
 
-                {/* Data Transparency Message */}
-                <div className="px-4 pb-4">
-                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs shadow-sm dark:border-blue-500/10 dark:bg-blue-900/10">
-                        <p className="font-bold text-blue-900 dark:text-blue-300 mb-1">
+                {/* Data Transparency - Surface Container High */}
+                <div className="mt-auto px-1">
+                    <div className="rounded-[24px] bg-md-surface-container-highest p-5 text-xs text-md-on-surface-variant/90">
+                        <p className="font-black uppercase tracking-tight mb-2 flex items-center gap-2 text-md-primary">
                             {t('dataTransparencyTitle')}
                         </p>
-                        <p className="mb-2 font-medium leading-relaxed text-slate-800 dark:text-slate-400">
+                        <p className="mb-3 font-medium leading-relaxed opacity-80">
                             {t('dataTransparency')}
                         </p>
-                        <code className="block w-full break-all rounded border border-blue-200 bg-white px-2 py-1.5 font-mono text-[10px] text-slate-800 transition-colors dark:border-transparent dark:bg-black/20 dark:text-slate-400">
-                            {userDataPath || '...'}
-                        </code>
-                        <button
-                            onClick={() => {
-                                void window.ipcRenderer.invoke('system:open-logs').catch((error) => {
-                                    console.error('Failed to open logs:', error);
-                                });
-                            }}
-                            className="mt-2 w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-white/10 dark:bg-white/5 dark:text-blue-300 dark:hover:bg-white/10"
-                        >
-                            {t('openLogs')}
-                        </button>
-                        <button
-                            onClick={() => setShowTroubleshooting(true)}
-                            className="mt-2 w-full rounded border border-slate-300 bg-slate-100 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-                        >
-                            {t('troubleshooting')}
-                        </button>
+                        <div className="relative group">
+                            <code className="block w-full break-all rounded-xl bg-md-surface-container-low px-3 py-2 font-mono text-[9px] text-md-on-surface-variant/80 transition-colors">
+                                {userDataPath || '...'}
+                            </code>
+                            <button
+                                onClick={() => {
+                                    void window.ipcRenderer.invoke('system:open-logs').catch((error) => {
+                                        console.error('Failed to open logs:', error);
+                                    });
+                                }}
+                                className="absolute right-1 top-1 p-1.5 rounded-lg bg-md-surface-container-high hover:bg-md-primary/10 text-md-primary transition-colors"
+                                title={t('openLogs')}>
+                                <ExternalLink className="h-3 w-3" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="space-y-2 border-t border-slate-200 p-4 dark:border-white/5">
-                    {/* Idioma Selector */}
-                    <div className="flex items-center justify-between rounded-lg p-2 text-sm font-bold text-black dark:text-slate-400">
-                        <span className="flex items-center gap-2">
-                            <Languages className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <div className="mt-6 space-y-3 pt-4">
+                    {/* Language Selector */}
+                    <div className="flex items-center justify-between px-4 py-2 rounded-full bg-md-surface-container-high">
+                        <div className="flex items-center gap-3 text-sm font-bold text-md-on-surface-variant">
+                            <Languages className="h-4 w-4" />
                             {t('language')}
-                        </span>
-                        <div className="flex gap-1">
+                        </div>
+                        <div className="flex bg-md-surface-container-low rounded-full p-1">
                             <button
                                 onClick={() => setLanguage('en')}
-                                className={clsx("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold transition-all shadow-sm", language === 'en' ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700")}
-                            >
+                                className={clsx(
+                                    "px-3 py-1.5 rounded-full text-[10px] font-black transition-all",
+                                    language === 'en' ? "bg-md-primary text-md-on-primary shadow-sm" : "text-md-on-surface-variant hover:text-md-on-surface"
+                                )}>
                                 EN
                             </button>
                             <button
                                 onClick={() => setLanguage('es')}
-                                className={clsx("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold transition-all shadow-sm", language === 'es' ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700")}
-                            >
+                                className={clsx(
+                                    "px-3 py-1.5 rounded-full text-[10px] font-black transition-all",
+                                    language === 'es' ? "bg-md-primary text-md-on-primary shadow-sm" : "text-md-on-surface-variant hover:text-md-on-surface"
+                                )}>
                                 ES
                             </button>
                         </div>
                     </div>
 
+                    {/* Dark Mode Toggle */}
                     <button
                         onClick={toggleDarkMode}
-                        className="flex w-full items-center justify-between rounded-lg p-2 text-sm font-bold text-black hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-white/5 transition-all duration-200"
-                    >
-                        <span className="flex items-center gap-2">
-                            {darkMode ? <Moon className="h-4 w-4 text-indigo-400" /> : <Sun className="h-4 w-4 text-amber-500" />}
+                        className="flex w-full items-center justify-between rounded-full bg-md-surface-container-high px-4 py-3 text-sm font-bold text-md-on-surface-variant hover:bg-md-surface-container-highest transition-all duration-300">
+                        <span className="flex items-center gap-3">
+                            {darkMode ? <Moon className="h-4 w-4 text-md-primary" /> : <Sun className="h-4 w-4 text-md-primary" />}
                             {darkMode ? t('darkMode') : t('lightMode')}
                         </span>
                         <div className={clsx(
-                            "h-5 w-10 p-0.5 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center transition-all duration-500",
-                            darkMode ? "justify-end bg-indigo-500/20" : "justify-start"
+                            "h-6 w-12 p-1 rounded-full flex items-center transition-all duration-500",
+                            darkMode ? "justify-end bg-md-primary" : "justify-start bg-md-surface-variant"
                         )}>
-                            <div className="h-4 w-4 rounded-full bg-white shadow-md border border-slate-200 dark:border-transparent" />
+                            <div className={clsx("h-4 w-4 rounded-full shadow-sm transition-colors", darkMode ? "bg-md-on-primary" : "bg-md-outline")} />
                         </div>
                     </button>
                 </div>
-
             </aside>
 
-            {/* Main Content */}
-            <main className="relative z-10 flex flex-1 flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                    <div className="w-full h-full flex flex-col px-4">
+            {/* Main Content - Surface (Background) */}
+            <main className="relative flex flex-1 flex-col overflow-hidden bg-md-surface transition-colors duration-300">
+                <div className="flex-1 overflow-y-auto">
+                    <div className="max-w-7xl mx-auto p-4 lg:p-8">
                         {children}
                     </div>
                 </div>

@@ -27,69 +27,101 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
             onClick={isInapplicable ? undefined : onToggle}
             className={clsx(
-                "group relative overflow-hidden rounded-xl border p-4 shadow-sm transition-all hover:shadow-md",
+                "group relative overflow-hidden rounded-2xl p-4 transition-all duration-200",
                 isInapplicable
-                    ? "cursor-default border-amber-300 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-900/10"
+                    ? "bg-md-surface-container-highest/40 opacity-50 cursor-default"
                     : isSelected
-                        ? "cursor-pointer border-blue-500 bg-blue-50/50 dark:border-blue-500/50 dark:bg-blue-900/10"
-                        : "cursor-pointer border-slate-300 bg-white hover:border-blue-500 hover:bg-slate-50 dark:border-white/5 dark:bg-black/20 dark:hover:border-white/10 dark:hover:bg-black/30"
+                        ? "bg-md-secondary-container shadow-md cursor-pointer transform scale-[1.01]"
+                        : "bg-md-surface-container-low hover:bg-md-surface-container-high hover:shadow-lg cursor-pointer shadow-sm"
             )}
         >
-            <div className="flex items-center gap-4">
-                {/* Checkbox Area */}
-                <div className={clsx(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-all",
-                    isInapplicable
-                        ? "border-amber-500/50 text-amber-600 bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400"
-                        : isSelected
-                            ? "border-blue-500 bg-blue-500 text-white"
-                            : "border-gray-400 bg-transparent text-transparent group-hover:border-blue-500 dark:border-gray-600"
-                )}>
-                    {isInapplicable ? <AlertCircle className="h-4 w-4" /> : <Check className="h-4 w-4" strokeWidth={3} />}
+            <div className="flex items-start gap-3">
+                {/* Compact Indicator */}
+                <div className="py-0.5">
+                    <div className={clsx(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+                        isInapplicable
+                            ? "bg-md-surface-dim text-md-on-surface-variant/40"
+                            : isSelected
+                                ? "bg-md-primary text-md-on-primary"
+                                : "bg-md-surface-container-highest text-transparent group-hover:bg-md-surface-container-highest/80"
+                    )}>
+                        {isInapplicable ? <AlertCircle className="h-3 w-3" /> : <Check className={clsx("h-3 w-3 stroke-[3px] transition-opacity", isSelected ? "opacity-100" : "opacity-0")} />}
+                    </div>
                 </div>
 
-                <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-black dark:text-gray-100">{update.name}</h3>
-                        {/* Source badge */}
-                        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:bg-white/10 dark:text-gray-400">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                        <h3 className={clsx(
+                            "text-sm font-bold tracking-tight truncate leading-tight",
+                            isSelected ? "text-md-on-secondary-container" : "text-md-on-surface"
+                        )}>
+                            {update.name}
+                        </h3>
+                        <span className={clsx(
+                            "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest",
+                            isSelected ? "bg-md-on-secondary-container/10 text-md-on-secondary-container" : "bg-md-surface-container-highest text-md-on-surface-variant"
+                        )}>
                             {update.source || 'winget'}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-400">
-                        <span className="font-mono text-xs font-bold">{update.id}</span>
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="font-mono text-[9px] font-bold text-md-on-surface-variant/60 truncate">
+                            {update.id}
+                        </span>
                     </div>
 
                     {isInapplicable ? (
-                        <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400">
-                            {isManualUninstall ? t('updateManualUninstall') : t('updateInapplicable')}
+                        <div className="flex items-center gap-2 rounded-lg bg-md-error-container px-3 py-2">
+                            <AlertCircle className="h-3.5 w-3.5 text-md-on-error-container" />
+                            <span className="text-[10px] font-bold uppercase tracking-tight text-md-on-error-container">
+                                {isManualUninstall ? t('updateManualUninstall') : t('updateInapplicable')}
+                            </span>
                         </div>
                     ) : (
-                        <div className="mt-3 flex items-center gap-4 text-sm">
-                            <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-500">{t('current')}</span>
-                                <span className={clsx("font-bold text-sm", isUnknown ? "text-amber-800" : "text-black dark:text-gray-300")}>
-                                    {isUnknown ? (
-                                        <span className="flex items-center gap-1">
-                                            <AlertCircle className="h-3 w-3" /> {t('unknown')}
-                                        </span>
-                                    ) : update.version}
-                                </span>
+                        <div className="grid grid-cols-[1fr,auto,1fr] items-center gap-2">
+                            <div className="flex flex-col gap-0.5 items-start">
+                                <span className={clsx("text-[8px] font-black uppercase tracking-widest opacity-60", isSelected ? "text-md-on-secondary-container" : "text-md-on-surface-variant")}>{t('current')}</span>
+                                <div className={clsx(
+                                    "flex items-center gap-1.5 font-bold text-xs",
+                                    isUnknown ? "text-md-error" : (isSelected ? "text-md-on-secondary-container" : "text-md-on-surface")
+                                )}>
+                                    {isUnknown && <AlertCircle className="h-3 w-3" />}
+                                    <span className="truncate max-w-[100px]">
+                                        {isUnknown ? t('unknown') : update.version}
+                                    </span>
+                                </div>
                             </div>
-                            <ArrowRight className="h-4 w-4 text-slate-500" />
-                            <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-500">{t('new')}</span>
-                                <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{update.available}</span>
+
+                            <div className={clsx(
+                                "flex items-center justify-center p-1.5 rounded-full",
+                                isSelected ? "bg-md-on-secondary-container/10" : "bg-md-surface-container-highest"
+                            )}>
+                                <ArrowRight className={clsx("h-3 w-3", isSelected ? "text-md-on-secondary-container" : "text-md-outline")} />
+                            </div>
+
+                            <div className="flex flex-col gap-0.5 items-end">
+                                <span className={clsx("text-[8px] font-black uppercase tracking-widest opacity-60", isSelected ? "text-md-on-secondary-container" : "text-md-on-surface-variant")}>{t('new')}</span>
+                                <span className={clsx(
+                                    "font-black text-xs",
+                                    isSelected ? "text-md-on-secondary-container" : "text-md-primary"
+                                )}>
+                                    {update.available}
+                                </span>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
+
+            {isSelected && (
+                <div className="absolute top-0 right-0 h-24 w-24 bg-md-primary/10 blur-2xl rounded-full -mr-12 -mt-12 pointer-events-none" />
+            )}
         </motion.div>
     );
 };

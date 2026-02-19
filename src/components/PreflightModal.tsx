@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, ShieldAlert, X, Wrench } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ShieldAlert, X, Wrench, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import type { PreflightResult } from '../shared/types';
+import { clsx } from 'clsx';
 
 interface PreflightModalProps {
     isOpen: boolean;
@@ -51,66 +52,87 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4">
+            <div className="fixed inset-0 z-[170] flex items-center justify-center p-4">
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-white/10 overflow-hidden"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={onCancel}
+                    className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                />
+
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    className="relative w-full max-w-2xl overflow-hidden rounded-[28px] bg-md-surface-container-high shadow-2xl"
                 >
-                    <div className="relative bg-gradient-to-r from-blue-700 to-indigo-700 p-6 text-white">
-                        <div className="flex items-center gap-3">
-                            <ShieldAlert className="h-8 w-8 text-white/90" />
+                    <div className="bg-md-primary-container p-6 md:p-8 text-md-on-primary-container relative">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 rounded-2xl bg-md-primary text-md-on-primary shadow-sm">
+                                <ShieldAlert className="h-6 w-6" />
+                            </div>
                             <div>
-                                <h2 className="text-xl font-bold">{t('preflightTitle')}</h2>
-                                <p className="text-white/85 text-sm">{t('preflightDesc')}</p>
+                                <h2 className="text-2xl font-black tracking-tight">{t('preflightTitle')}</h2>
+                                <p className="text-sm font-bold opacity-80">{t('preflightDesc')}</p>
                             </div>
                         </div>
-                        <button onClick={onCancel} className="absolute top-4 right-4 rounded-full bg-white/20 p-1 hover:bg-white/30 text-white">
+                        <button
+                            onClick={onCancel}
+                            className="absolute top-6 right-6 p-2 rounded-full hover:bg-md-on-primary-container/10 text-md-on-primary-container transition-colors"
+                        >
                             <X className="h-5 w-5" />
                         </button>
                     </div>
 
-                    <div className="p-6 space-y-4">
-                        <div className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+                    <div className="p-6 md:p-8 space-y-6">
+                        <div className={clsx(
+                            "rounded-2xl px-6 py-4 text-sm font-black text-center uppercase tracking-widest transition-colors",
+                            result.overall === 'ok' ? "bg-md-secondary-container/30 text-md-on-secondary-container" :
+                                result.overall === 'warning' ? "bg-md-error-container/10 text-md-on-error-container" :
+                                    "bg-md-error text-md-on-error"
+                        )}>
                             {result.overall === 'ok' && t('preflightOverallOk')}
                             {result.overall === 'warning' && t('preflightOverallWarning')}
                             {result.overall === 'error' && t('preflightOverallError')}
                         </div>
 
-                        <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                        <div className="space-y-3 max-h-[340px] overflow-y-auto pr-2 custom-scrollbar">
                             {checks.map((key) => {
                                 const ok = result.checks[key];
                                 const detail = result.details[key];
                                 return (
                                     <div
                                         key={key}
-                                        className="rounded-lg border border-slate-300 bg-white p-3 dark:border-white/10 dark:bg-slate-900/40"
+                                        className="rounded-2xl bg-md-surface-container-highest p-4 transition-all hover:bg-md-surface-variant/20 hover:shadow-sm"
                                     >
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-3">
                                             {ok ? (
-                                                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                                                <CheckCircle2 className="h-5 w-5 text-md-primary" />
                                             ) : (
-                                                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                                <AlertTriangle className="h-5 w-5 text-md-error" />
                                             )}
-                                            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                            <p className="text-sm font-black text-md-on-surface-variant">
                                                 {t(checkLabelKeys[key])}
                                             </p>
                                         </div>
                                         {detail && (
-                                            <p className="mt-2 text-xs text-slate-700 dark:text-slate-400 whitespace-pre-wrap break-words font-mono">
-                                                {detail}
-                                            </p>
+                                            <div className="mt-3 flex gap-2">
+                                                <ChevronRight className="h-3 w-3 mt-1 shrink-0 text-md-primary opacity-50" />
+                                                <p className="text-[11px] font-mono font-medium text-md-on-surface-variant/70 whitespace-pre-wrap break-words">
+                                                    {detail}
+                                                </p>
+                                            </div>
                                         )}
                                     </div>
                                 );
                             })}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-4 pt-2">
                             <button
                                 onClick={onCancel}
-                                className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-sm font-bold text-slate-800 transition-colors hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                                className="rounded-full px-6 py-4 text-sm font-black text-md-on-surface-variant hover:bg-md-surface-variant/50 transition-all active:scale-95"
                             >
                                 {t('preflightCancel')}
                             </button>
@@ -118,19 +140,30 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
                                 onClick={onContinue}
                                 disabled={!canContinue}
                                 ref={continueRef}
-                                className="rounded-lg border border-blue-500/40 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-500/30 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                                className={clsx(
+                                    "rounded-full px-6 py-4 text-sm font-black transition-all shadow-md active:scale-95",
+                                    canContinue
+                                        ? "bg-md-primary text-md-on-primary hover:shadow-lg"
+                                        : "bg-md-surface-variant/30 text-md-on-surface-variant/40 cursor-not-allowed shadow-none"
+                                )}
                             >
                                 {canContinue ? t('preflightContinue') : t('preflightFixFirst')}
                             </button>
                         </div>
 
                         {!canContinue && (
-                            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300 flex items-center gap-2">
-                                <Wrench className="h-4 w-4" />
-                                {t('preflightBlockingNote')}
+                            <div className="rounded-2xl bg-md-error-container/20 p-4 flex items-center gap-3 animate-pulse">
+                                <Wrench className="h-5 w-5 text-md-error" />
+                                <p className="text-[11px] font-black uppercase tracking-tight text-md-on-error-container">
+                                    {t('preflightBlockingNote')}
+                                </p>
                             </div>
                         )}
                     </div>
+
+                    <p className="pb-6 text-center text-[10px] font-black uppercase tracking-[0.2em] text-md-primary opacity-40">
+                        SYSTEM INTEGRITY CHECK
+                    </p>
                 </motion.div>
             </div>
         </AnimatePresence>

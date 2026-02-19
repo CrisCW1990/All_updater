@@ -1,5 +1,149 @@
 @import "tailwindcss";
 
+@theme {
+  --color-md-primary: var(--md-sys-color-primary);
+  --color-md-on-primary: var(--md-sys-color-on-primary);
+  --color-md-primary-container: var(--md-sys-color-primary-container);
+  --color-md-on-primary-container: var(--md-sys-color-on-primary-container);
+
+  --color-md-secondary: var(--md-sys-color-secondary);
+  --color-md-on-secondary: var(--md-sys-color-on-secondary);
+  --color-md-secondary-container: var(--md-sys-color-secondary-container);
+  --color-md-on-secondary-container: var(--md-sys-color-on-secondary-container);
+
+  --color-md-tertiary: var(--md-sys-color-tertiary);
+  --color-md-on-tertiary: var(--md-sys-color-on-tertiary);
+  --color-md-tertiary-container: var(--md-sys-color-tertiary-container);
+  --color-md-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+
+  --color-md-error: var(--md-sys-color-error);
+  --color-md-on-error: var(--md-sys-color-on-error);
+  --color-md-error-container: var(--md-sys-color-error-container);
+  --color-md-on-error-container: var(--md-sys-color-on-error-container);
+
+  --color-md-surface: var(--md-sys-color-surface);
+  --color-md-on-surface: var(--md-sys-color-on-surface);
+  --color-md-surface-dim: var(--md-sys-color-surface-dim);
+  --color-md-surface-bright: var(--md-sys-color-surface-bright);
+  --color-md-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+  --color-md-surface-container-low: var(--md-sys-color-surface-container-low);
+  --color-md-surface-container: var(--md-sys-color-surface-container);
+  --color-md-surface-container-high: var(--md-sys-color-surface-container-high);
+  --color-md-surface-container-highest: var(--md-sys-color-surface-container-highest);
+
+  --color-md-on-surface-variant: var(--md-sys-color-on-surface-variant);
+  --color-md-outline: var(--md-sys-color-outline);
+  --color-md-outline-variant: var(--md-sys-color-outline-variant);
+}
+
+@layer base {
+  :root {
+    /* Primary Key Color: Blue 0061a4 */
+    --md-sys-color-primary: #0061A4;
+    --md-sys-color-on-primary: #FFFFFF;
+    --md-sys-color-primary-container: #D1E4FF;
+    --md-sys-color-on-primary-container: #001D36;
+
+    /* Secondary Key Color: Slate Blue 535f70 */
+    --md-sys-color-secondary: #535F70;
+    --md-sys-color-on-secondary: #FFFFFF;
+    --md-sys-color-secondary-container: #D7E3F7;
+    --md-sys-color-on-secondary-container: #101C2B;
+
+    /* Tertiary Key Color: Violet 6b5778 */
+    --md-sys-color-tertiary: #6B5778;
+    --md-sys-color-on-tertiary: #FFFFFF;
+    --md-sys-color-tertiary-container: #F2DAFF;
+    --md-sys-color-on-tertiary-container: #251431;
+
+    /* Error */
+    --md-sys-color-error: #BA1A1A;
+    --md-sys-color-on-error: #FFFFFF;
+    --md-sys-color-error-container: #FFDAD6;
+    --md-sys-color-on-error-container: #410002;
+
+    /* Neutral Surfaces (Light) */
+    --md-sys-color-background: #FDFCFF;
+    --md-sys-color-on-background: #1A1C1E;
+    --md-sys-color-surface: #FDFCFF;
+    --md-sys-color-on-surface: #1A1C1E;
+
+    /* M3 Surface Tones for Elevation/Separation */
+    --md-sys-color-surface-dim: #D9D9E0;
+    --md-sys-color-surface-bright: #FDFCFF;
+    --md-sys-color-surface-container-lowest: #FFFFFF;
+    --md-sys-color-surface-container-low: #F3F3F6;
+    --md-sys-color-surface-container: #EDEDF1;
+    --md-sys-color-surface-container-high: #E7E8EE;
+    --md-sys-color-surface-container-highest: #E2E2E6;
+
+    --md-sys-color-on-surface-variant: #43474E;
+    --md-sys-color-outline: #73777F;
+    --md-sys-color-outline-variant: #C3C7CF;
+    --md-sys-color-shadow: #000000;
+    --md-sys-color-scrim: #000000;
+    --md-sys-color-inverse-surface: #2F3033;
+    --md-sys-color-inverse-on-surface: #F1F0F4;
+    --md-sys-color-inverse-primary: #9ECAFF;
+  }
+
+  .dark {
+    /* Primary Key Color: Blue 9ecaff */
+    --md-sys-color-primary: #9ECAFF;
+    --md-sys-color-on-primary: #003258;
+    --md-sys-color-primary-container: #00497D;
+    --md-sys-color-on-primary-container: #D1E4FF;
+
+    /* Secondary Key Color: Slate Blue bbc7db */
+    --md-sys-color-secondary: #BBC7DB;
+    --md-sys-color-on-secondary: #253140;
+    --md-sys-color-secondary-container: #3B4858;
+    --md-sys-color-on-secondary-container: #D7E3F7;
+
+    /* Tertiary Key Color: Violet d6bee4 */
+    --md-sys-color-tertiary: #D6BEE4;
+    --md-sys-color-on-tertiary: #3B2948;
+    --md-sys-color-tertiary-container: #523F5F;
+    --md-sys-color-on-tertiary-container: #F2DAFF;
+
+    /* Error */
+    --md-sys-color-error: #FFB4AB;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-error-container: #93000A;
+    --md-sys-color-on-error-container: #FFDAD6;
+
+    /* Neutral Surfaces (Dark) */
+    --md-sys-color-background: #111315;
+    --md-sys-color-on-background: #E2E2E6;
+    --md-sys-color-surface: #111315;
+    /* Darker base for main content */
+    --md-sys-color-on-surface: #E2E2E6;
+
+    /* M3 Surface Tones for Elevation/Separation - CRITICAL FOR NO BORDERS */
+    --md-sys-color-surface-dim: #0C0E11;
+    --md-sys-color-surface-bright: #37393E;
+    --md-sys-color-surface-container-lowest: #0F1012;
+    --md-sys-color-surface-container-low: #1A1C1E;
+    /* Sidebar / Low Container */
+    /* Base */
+    --md-sys-color-surface-container: #1E2022;
+    /* +1 */
+    --md-sys-color-surface-container-high: #282A2D;
+    /* +2 */
+    --md-sys-color-surface-container-highest: #333538;
+    /* +3 */
+
+    --md-sys-color-on-surface-variant: #C3C7CF;
+    --md-sys-color-outline: #8D9199;
+    --md-sys-color-outline-variant: #43474E;
+    --md-sys-color-shadow: #000000;
+    --md-sys-color-scrim: #000000;
+    --md-sys-color-inverse-surface: #E2E2E6;
+    --md-sys-color-inverse-on-surface: #2F3033;
+    --md-sys-color-inverse-primary: #0061A4;
+  }
+}
+
 @keyframes progress {
   0% {
     transform: scaleX(0);
@@ -19,12 +163,15 @@
 }
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -33,6 +180,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {

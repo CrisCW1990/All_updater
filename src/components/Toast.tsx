@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, X, Info } from 'lucide-react';
 import { clsx } from 'clsx';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -21,33 +22,38 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type, onClose, durati
     }, [id, duration, onClose]);
 
     const icons = {
-        success: <CheckCircle className="h-5 w-5 text-emerald-500" />,
-        error: <XCircle className="h-5 w-5 text-rose-500" />,
-        warning: <AlertCircle className="h-5 w-5 text-amber-500" />,
-        info: <AlertCircle className="h-5 w-5 text-blue-500" />,
+        success: <CheckCircle className="h-5 w-5 text-md-primary" />,
+        error: <XCircle className="h-5 w-5 text-md-error" />,
+        warning: <AlertCircle className="h-5 w-5 text-md-secondary" />,
+        info: <Info className="h-5 w-5 text-md-primary" />,
     };
 
     const styles = {
-        success: "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400",
-        error: "border-rose-600 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400",
-        warning: "border-amber-600 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400",
-        info: "border-blue-600 bg-blue-50 text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400",
+        success: "bg-md-primary-container text-md-on-primary-container",
+        error: "bg-md-error-container text-md-on-error-container",
+        warning: "bg-md-secondary-container text-md-on-secondary-container",
+        info: "bg-md-surface-container-highest text-md-on-surface-variant",
     };
 
     return (
-        <div className={clsx(
-            "flex items-center gap-3 rounded-xl border p-4 shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-right-full duration-300",
-            styles[type]
-        )}>
-            {icons[type]}
-            <p className="text-sm font-bold">{message}</p>
+        <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
+            className={clsx(
+                "flex items-center gap-4 rounded-[16px] border px-6 py-4 shadow-xl backdrop-blur-md",
+                styles[type]
+            )}
+        >
+            <div className="shrink-0">{icons[type]}</div>
+            <p className="text-sm font-black tracking-tight">{message}</p>
             <button
                 onClick={() => onClose(id)}
-                className="ml-auto rounded-lg p-1 hover:bg-black/5 dark:hover:bg-white/5"
+                className="ml-4 rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
                 <X className="h-4 w-4 opacity-50 hover:opacity-100" />
             </button>
-        </div>
+        </motion.div>
     );
 };
 
@@ -58,10 +64,12 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onClose }) => {
     return (
-        <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3">
-            {toasts.map((toast) => (
-                <Toast key={toast.id} {...toast} onClose={onClose} />
-            ))}
+        <div className="fixed bottom-8 right-8 z-[300] flex flex-col gap-4 items-end">
+            <AnimatePresence>
+                {toasts.map((toast) => (
+                    <Toast key={toast.id} {...toast} onClose={onClose} />
+                ))}
+            </AnimatePresence>
         </div>
     );
 };

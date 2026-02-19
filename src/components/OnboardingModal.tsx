@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Info, Check } from 'lucide-react';
+import { Check, Languages, ShieldCheck } from 'lucide-react';
+import { clsx } from 'clsx';
 import { useLanguage } from '../context/LanguageContext';
 
 interface OnboardingModalProps {
@@ -38,99 +39,111 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
             >
                 <div className="relative w-full max-w-lg">
                     <AnimatePresence mode="wait">
                         {step === 'language' && (
                             <motion.div
                                 key="step-language"
-                                initial={{ scale: 0.9, opacity: 0, x: -20 }}
-                                animate={{ scale: 1, opacity: 1, x: 0 }}
-                                exit={{ scale: 0.9, opacity: 0, x: 20 }}
-                                transition={{ type: "spring", duration: 0.5 }}
-                                className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900 shadow-2xl transition-colors"
+                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.9, opacity: 0, y: -20 }}
+                                className="relative overflow-hidden rounded-[28px] bg-md-surface-container-high p-8 shadow-2xl text-center"
                             >
-                                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 flex items-center justify-center">
-                                    <h2 className="text-2xl font-bold text-white tracking-tight text-center">
-                                        Select Language / Seleccione Idioma
-                                    </h2>
-                                </div>
-                                <div className="relative p-8 flex flex-col items-center text-center">
-                                    <div className="grid grid-cols-2 gap-4 w-full mb-8">
-                                        <button
-                                            onClick={() => handleLanguageSelect('en')}
-                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 dark:bg-slate-800 p-6 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
-                                        >
-                                            <span className="text-3xl">🇺🇸</span>
-                                            <span className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400">English</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleLanguageSelect('es')}
-                                            className="flex flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 dark:bg-slate-800 p-6 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-blue-500 hover:scale-[1.02] transition-all group"
-                                        >
-                                            <span className="text-3xl">🇪🇸</span>
-                                            <span className="text-lg font-bold text-slate-800 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400">Español</span>
-                                        </button>
+                                <div className="mb-6 flex justify-center">
+                                    <div className="p-4 rounded-[20px] bg-md-primary-container text-md-on-primary-container">
+                                        <Languages className="h-10 w-10" />
                                     </div>
-
-                                    <p className="text-xs text-slate-500">
-                                        You can change this later / Puede cambiarlo después
-                                    </p>
                                 </div>
+                                <h2 className="text-3xl font-black text-md-on-surface mb-2 tracking-tight">
+                                    Choose Your Dialect
+                                </h2>
+                                <p className="text-sm font-bold text-md-on-surface-variant mb-8 opacity-70">
+                                    How shall I deliver my judgments?
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-4 w-full">
+                                    <button
+                                        onClick={() => handleLanguageSelect('en')}
+                                        className="flex flex-col items-center justify-center gap-4 rounded-[24px] bg-md-surface-variant/30 p-8 hover:bg-md-primary/10 hover:shadow-md transition-all group"
+                                    >
+                                        <span className="text-4xl group-hover:scale-110 transition-transform">🇺🇸</span>
+                                        <span className="text-base font-black text-md-on-surface">English</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleLanguageSelect('es')}
+                                        className="flex flex-col items-center justify-center gap-4 rounded-[24px] bg-md-surface-variant/30 p-8 hover:bg-md-primary/10 hover:shadow-md transition-all group"
+                                    >
+                                        <span className="text-4xl group-hover:scale-110 transition-transform">🇪🇸</span>
+                                        <span className="text-base font-black text-md-on-surface">Español</span>
+                                    </button>
+                                </div>
+
+                                <p className="mt-8 text-[10px] font-black uppercase tracking-[0.2em] text-md-primary opacity-50">
+                                    REVERSIBLE OPERATION
+                                </p>
                             </motion.div>
                         )}
 
                         {step === 'welcome' && (
                             <motion.div
                                 key="step-welcome"
-                                initial={{ scale: 0.9, opacity: 0, x: 20 }}
-                                animate={{ scale: 1, opacity: 1, x: 0 }}
-                                exit={{ scale: 0.9, opacity: 0, x: -20 }}
-                                transition={{ type: "spring", duration: 0.5 }}
-                                className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900 shadow-2xl transition-colors"
+                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.9, opacity: 0, y: -20 }}
+                                className="relative overflow-hidden rounded-[28px] bg-md-surface-container-high p-8 shadow-2xl text-center"
                             >
-                                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 flex flex-col items-center text-center">
-                                    <div className="mb-4 rounded-full bg-white/20 p-4 ring-1 ring-white/30">
-                                        <Info className="h-10 w-10 text-white" />
+                                <div className="mb-6 flex justify-center">
+                                    <div className="p-4 rounded-[20px] bg-md-secondary-container text-md-on-secondary-container">
+                                        <ShieldCheck className="h-10 w-10" />
                                     </div>
-                                    <h2 className="text-2xl font-bold text-white tracking-tight">
-                                        {t('onboardingTitle')}
-                                    </h2>
                                 </div>
 
-                                <div className="relative p-8 flex flex-col items-center text-center">
-                                    <p className="mb-8 text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-md">
-                                        {t('onboardingBody')}
-                                    </p>
+                                <h2 className="text-3xl font-black text-md-on-surface mb-4 tracking-tight">
+                                    {t('onboardingTitle')}
+                                </h2>
 
-                                    {/* Checkbox */}
-                                    <div
-                                        className="mb-8 flex items-center gap-3 cursor-pointer group"
-                                        onClick={() => setDontShowAgain(!dontShowAgain)}
-                                    >
-                                        <div className={`
-                                            flex h-5 w-5 items-center justify-center rounded border transition-all duration-200
-                                            ${dontShowAgain
-                                                ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                                                : 'border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/50 group-hover:border-slate-400 dark:group-hover:border-slate-500'}
-                                        `}>
-                                            {dontShowAgain && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                                <p className="mb-8 text-base font-medium text-md-on-surface-variant leading-relaxed opacity-90">
+                                    {t('onboardingBody')}
+                                </p>
+
+                                <div className="space-y-6">
+                                    {/* M3 Checkbox Implementation */}
+                                    <label className="flex items-center justify-center gap-4 cursor-pointer group">
+                                        <div className="relative flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={dontShowAgain}
+                                                onChange={() => setDontShowAgain(!dontShowAgain)}
+                                                className="peer sr-only"
+                                            />
+                                            {/* Checkbox with Surface/Primary colors, NO borders */}
+                                            <div className={clsx(
+                                                "h-6 w-6 rounded-md transition-all flex items-center justify-center",
+                                                dontShowAgain ? "bg-md-primary text-md-on-primary" : "bg-md-surface-variant text-transparent"
+                                            )}>
+                                                <Check className={clsx("h-4 w-4 stroke-[4px] transition-opacity", dontShowAgain ? "opacity-100" : "opacity-0")} />
+                                            </div>
+                                            <div className="absolute inset-[-12px] rounded-full bg-md-primary/0 transition-colors peer-hover:bg-md-primary/10 active:peer-hover:bg-md-primary/20" />
                                         </div>
-                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-300 select-none">
+                                        <span className="text-sm font-black text-md-on-surface-variant group-hover:text-md-on-surface transition-colors">
                                             {t('onboardingDontShow')}
                                         </span>
-                                    </div>
+                                    </label>
 
-                                    {/* Button */}
                                     <button
                                         onClick={() => onClose(dontShowAgain)}
                                         ref={startRef}
-                                        className="w-full max-w-xs rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] hover:shadow-blue-500/30 active:scale-[0.98]"
+                                        className="w-full px-8 py-4 rounded-full bg-md-primary text-md-on-primary font-black text-lg shadow-lg hover:shadow-md-primary/20 transition-all hover:scale-[1.02] active:scale-95"
                                     >
                                         {t('onboardingBtn')}
                                     </button>
                                 </div>
+
+                                <p className="mt-8 text-[10px] font-black uppercase tracking-[0.2em] text-md-secondary opacity-50">
+                                    DIRECTIVE INITIATED
+                                </p>
                             </motion.div>
                         )}
                     </AnimatePresence>

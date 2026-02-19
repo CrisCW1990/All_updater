@@ -39,30 +39,30 @@ export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onC
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="w-full max-w-lg rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-white/10 overflow-hidden"
+                    className="w-full max-w-lg rounded-[28px] bg-md-surface-container-high shadow-2xl overflow-hidden"
                 >
                     <div className="relative bg-gradient-to-r from-amber-500 to-orange-600 p-6 text-white">
                         <div className="flex items-center gap-3">
                             <ShieldCheck className="h-8 w-8 text-white/90" />
                             <div>
-                                <h2 className="text-xl font-bold">{t('safetyFirst')}</h2>
-                                <p className="text-white/80 text-sm">{t('restoreAsk')}</p>
+                                <h2 className="text-xl font-black tracking-tight">{t('safetyFirst')}</h2>
+                                <p className="text-white/80 text-sm font-medium">{t('restoreAsk')}</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="absolute top-4 right-4 rounded-full bg-white/20 p-1 hover:bg-white/30 text-white">
+                        <button onClick={onClose} className="absolute top-4 right-4 rounded-full bg-white/20 p-1 hover:bg-white/30 text-white transition-colors">
                             <X className="h-5 w-5" />
                         </button>
                     </div>
 
                     <div className="p-6 space-y-6">
-                        <p className="text-gray-700 dark:text-gray-300">
+                        <p className="text-md-on-surface-variant font-medium leading-relaxed">
                             {t('restoreDesc')}
                         </p>
 
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/20">
+                        <div className="rounded-2xl bg-amber-500/10 p-4">
                             <div className="flex gap-3">
-                                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-                                <div className="text-sm text-amber-800 dark:text-amber-200">
+                                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                <div className="text-sm font-bold text-amber-900 dark:text-amber-100 opacity-90">
                                     {t('restoreNote')}
                                 </div>
                             </div>
@@ -71,24 +71,24 @@ export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onC
                         <div className="grid grid-cols-2 gap-4 pt-2">
                             <button
                                 onClick={onSkip}
-                                className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-100 p-4 hover:border-slate-400 hover:bg-slate-200 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 transition-all"
+                                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-md-surface-variant/30 p-4 hover:bg-md-surface-variant/50 transition-all active:scale-95"
                             >
-                                <Zap className="h-6 w-6 text-slate-500 group-hover:text-slate-700 dark:text-gray-500 dark:group-hover:text-gray-300" />
+                                <Zap className="h-6 w-6 text-md-on-surface-variant opacity-60 group-hover:opacity-100" />
                                 <div className="text-center">
-                                    <span className="block font-semibold text-slate-800 dark:text-gray-200">{t('skipUpdate')}</span>
-                                    <span className="text-xs text-slate-600 dark:text-slate-400">{t('skipRisk')}</span>
+                                    <span className="block font-black text-md-on-surface-variant">{t('skipUpdate')}</span>
+                                    <span className="text-xs font-bold text-md-on-surface-variant opacity-50">{t('skipRisk')}</span>
                                 </div>
                             </button>
 
                             <button
                                 onClick={onConfirm}
                                 ref={confirmRef}
-                                className="group flex flex-col items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-50 p-4 ring-1 ring-blue-500 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 transition-all"
+                                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-md-primary-container p-4 hover:bg-md-primary/20 transition-all active:scale-95 shadow-sm hover:shadow-md"
                             >
-                                <ShieldCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                <ShieldCheck className="h-6 w-6 text-md-primary" />
                                 <div className="text-center">
-                                    <span className="block font-semibold text-blue-700 dark:text-blue-300">{t('createUpdate')}</span>
-                                    <span className="text-xs text-blue-700 dark:text-blue-400/70">{t('recommended')}</span>
+                                    <span className="block font-black text-md-on-primary-container">{t('createUpdate')}</span>
+                                    <span className="text-xs font-bold text-md-primary opacity-80">{t('recommended')}</span>
                                 </div>
                             </button>
                         </div>

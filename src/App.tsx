@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { Layout } from './components/Layout';
 import { UpdateCard } from './components/UpdateCard';
 import { RestoreModal } from './components/RestoreModal';
@@ -161,6 +162,15 @@ export default function App() {
     mediaQuery.addListener(handleChange);
     return () => mediaQuery.removeListener(handleChange);
   }, [themeMode]);
+
+  // Global Dark Mode Class
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const toggleTheme = () => {
     const previousMode = themeMode;
@@ -589,34 +599,40 @@ export default function App() {
       onTabChange={setActiveTab}
     >
       {activeTab === 'dashboard' ? (
-        <div className="mx-auto flex w-full max-w-7xl h-full flex-col gap-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex w-full max-w-7xl h-full flex-col gap-8">
+          {/* Dashboard Header - M3 Style */}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between px-2">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-black dark:text-white transition-colors">{t('dashboard')}</h2>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-400">{t('manageApps')}</p>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="h-2 w-2 rounded-full bg-md-primary animate-pulse" />
+                <h2 className="text-3xl font-black tracking-tight text-md-on-surface uppercase">{t('dashboard')}</h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm font-bold text-md-on-surface-variant opacity-70">{t('manageApps')}</p>
                 {systemInfo && (
-                  <span className="flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                    {systemInfo.arch} • {systemInfo.locale}
+                  <span className="flex items-center gap-2 rounded-full bg-md-secondary-container px-3 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-md-on-secondary-container border border-md-on-secondary-container/10">
+                    {systemInfo.arch} <span className="opacity-30">|</span> {systemInfo.locale}
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {!isInstalling && !isCreatingRestore && (
                 <button
                   onClick={() => checkAppUpdate(false)}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="group flex items-center gap-4 rounded-2xl bg-md-surface-container-high px-5 py-3 text-md-on-surface transition-all hover:bg-md-surface-container-highest hover:shadow-md active:scale-95"
                   title={t('appUpdateCheck')}
                 >
-                  <RefreshCw className={clsx("h-5 w-5", checkingAppVersion && "animate-spin")} />
-                  <span className="text-left leading-tight">
-                    <span className="block text-[11px] font-bold">{t('appUpdateHeaderHint')}</span>
-                    <span className="block text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                  <div className={clsx("p-2 rounded-xl bg-md-primary-container text-md-on-primary-container", checkingAppVersion && "animate-spin")}>
+                    <RefreshCw className="h-5 w-5" />
+                  </div>
+                  <div className="text-left leading-tight pr-2">
+                    <span className="block text-[10px] font-black uppercase tracking-widest opacity-60 mb-0.5">{t('appUpdateHeaderHint')}</span>
+                    <span className="block text-xs font-black">
                       {t('appUpdateCurrent')}: {appUpdateInfo?.currentVersion ? `v${appUpdateInfo.currentVersion}` : t('unknown')}
                     </span>
-                  </span>
+                  </div>
                 </button>
               )}
 
@@ -624,28 +640,28 @@ export default function App() {
                 <button
                   onClick={exportDiagnostics}
                   disabled={exportingDiagnostics}
-                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex items-center justify-center rounded-2xl bg-md-surface-container-high p-4 text-md-on-surface transition-all hover:bg-md-surface-container-highest hover:shadow-sm disabled:opacity-30 active:scale-95"
                   title={t('exportDiagnostics')}
                 >
-                  <FileText className={clsx("h-5 w-5", exportingDiagnostics && "animate-pulse")} />
+                  <FileText className={clsx("h-6 w-6", exportingDiagnostics && "animate-pulse")} />
                 </button>
               )}
 
               {updates.length > 0 && !loading && !isInstalling && (
                 <button
                   onClick={checkUpdates}
-                  className="flex shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-slate-700 shadow-sm transition-all hover:bg-gray-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-blue-400"
+                  className="flex items-center justify-center rounded-2xl bg-md-surface-container-high p-4 text-md-on-surface transition-all hover:bg-md-surface-container-highest hover:shadow-sm active:scale-95"
                   title={t('refresh')}
                 >
-                  <RefreshCw className="h-5 w-5" />
+                  <RefreshCw className="h-6 w-6" />
                 </button>
               )}
 
               {(isInstalling || isCreatingRestore) && (
-                <div className="flex shrink-0 items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 dark:border-blue-900/30 dark:bg-blue-900/20">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400" />
-                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                    {isCreatingRestore ? t('creatingRestore') + '...' : `${t('updatingApp')} ${installProgress?.current || 0}/${installProgress?.total || 0}`}
+                <div className="flex items-center gap-4 rounded-2xl bg-md-primary-container/50 px-6 py-3 border border-md-primary/20 backdrop-blur-sm">
+                  <div className="h-2 w-2 rounded-full bg-md-primary animate-ping" />
+                  <span className="text-sm font-black uppercase tracking-widest text-md-on-primary-container">
+                    {isCreatingRestore ? t('creatingRestore') : `${t('updatingApp')} ${installProgress?.current || 0}/${installProgress?.total || 0}`}
                   </span>
                 </div>
               )}
@@ -654,9 +670,9 @@ export default function App() {
                 <button
                   onClick={() => { void handleUpdateClick(); }}
                   disabled={selectedIds.size === 0 || runningPreflight}
-                  className="flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-blue-500/30 transition-all hover:scale-105 hover:from-blue-500 hover:to-indigo-500 disabled:scale-100 disabled:opacity-50 disabled:grayscale"
+                  className="flex items-center gap-4 rounded-2xl bg-md-primary px-8 py-4 font-black uppercase tracking-widest text-md-on-primary shadow-xl shadow-md-primary/20 transition-all hover:scale-[1.02] hover:shadow-2xl disabled:grayscale disabled:opacity-50 active:scale-95"
                 >
-                  <ArrowDownToLine className={clsx("h-5 w-5", runningPreflight && "animate-pulse")} />
+                  <ArrowDownToLine className={clsx("h-6 w-6", runningPreflight && "animate-pulse")} />
                   <span>{runningPreflight ? t('preflightRunning') : `${t('updateSelected')} (${selectedIds.size})`}</span>
                 </button>
               )}
@@ -725,67 +741,83 @@ export default function App() {
           )}
 
           {isWingetMissing ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-6 py-20 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-20 text-center">
               <div className="relative">
-                <div className="absolute -inset-4 rounded-full bg-red-500/20 blur-xl dark:bg-red-400/10" />
-                <XCircle className="relative h-24 w-24 text-red-500" strokeWidth={1} />
+                <div className="absolute -inset-10 rounded-full bg-md-error/10 blur-3xl" />
+                <div className="p-8 rounded-[32px] bg-md-error-container text-md-on-error-container shadow-2xl relative">
+                  <XCircle className="h-20 w-20" strokeWidth={1.5} />
+                </div>
               </div>
-              <div className="max-w-md space-y-2">
-                <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{t('wingetMissing')}</h3>
-                <p className="text-slate-700 dark:text-slate-400">
+              <div className="max-w-md space-y-4">
+                <h3 className="text-3xl font-black uppercase tracking-tight text-md-on-surface">{t('wingetMissing')}</h3>
+                <p className="text-md-on-surface-variant font-bold leading-relaxed">
                   {t('wingetMissingDesc')}
                 </p>
                 <button
                   onClick={() => window.ipcRenderer.invoke('system:open-url', 'https://aka.ms/getwinget')}
-                  className="mt-4 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-md-primary px-8 py-4 text-sm font-black uppercase tracking-widest text-md-on-primary shadow-lg hover:shadow-xl transition-all active:scale-95"
                 >
                   {t('getWinget')}
                 </button>
               </div>
             </div>
           ) : loading ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-20 text-center animate-in fade-in zoom-in duration-500">
+            <div className="flex flex-1 flex-col items-center justify-center space-y-12 py-32 text-center animate-in fade-in duration-700">
               <div className="relative">
-                <div className="absolute -inset-8 rounded-full bg-blue-500/10 blur-2xl animate-pulse dark:bg-blue-400/5" />
-                <div className="relative flex items-center justify-center">
-                  <div className="h-24 w-24 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin dark:border-slate-800 dark:border-t-blue-500" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-900 shadow-inner" />
+                {/* Sentient Spinner Style */}
+                <div className="h-32 w-32 rounded-full border-8 border-md-surface-container-highest flex items-center justify-center relative shadow-inner">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-[-8px] rounded-full border-8 border-transparent border-t-md-primary"
+                  />
+                  <div className="h-16 w-16 rounded-full bg-md-primary/10 flex items-center justify-center animate-pulse">
+                    <RefreshCw className="h-8 w-8 text-md-primary" />
                   </div>
                 </div>
+                <div className="absolute -inset-20 bg-md-primary/5 blur-[100px] -z-10" />
               </div>
-              <div className="space-y-4">
-                <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 dark:from-blue-400 dark:to-indigo-400 animate-pulse transition-all">
-                  {t('checking')}...
+
+              <div className="space-y-4 max-w-sm px-4">
+                <h3 className="text-4xl font-black uppercase tracking-tighter text-md-primary">
+                  {t('checking')}
                 </h3>
-                <p className="text-black dark:text-slate-300 font-bold max-w-xs mx-auto leading-relaxed text-lg">
+                <p className="text-lg font-black leading-relaxed text-md-on-surface-variant opacity-80 uppercase tracking-widest">
                   {t('scanningBody')}
                 </p>
               </div>
             </div>
           ) : !hasChecked ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-6 py-20 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center space-y-12 py-24 text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
               <div className="relative">
-                <div className="absolute -inset-4 rounded-full bg-blue-500/20 blur-xl dark:bg-blue-400/10" />
-                <Coffee className="relative h-24 w-24 text-slate-900/40 dark:text-slate-600" strokeWidth={1} />
+                <div className="absolute -inset-10 rounded-full bg-md-secondary-container/30 blur-[120px] animate-pulse" />
+                <div className="relative p-10 rounded-[40px] bg-md-surface-container-high shadow-2xl">
+                  <Coffee className="h-24 w-24 text-md-primary" strokeWidth={1.5} />
+                </div>
               </div>
-              <div className="max-w-md space-y-2">
-                <h3 className="text-2xl font-bold text-black dark:text-white">{t('readyTitle')}</h3>
-              <p className="font-medium text-slate-700 dark:text-slate-400">{t('readyDesc')}</p>
+
+              <div className="max-w-lg space-y-4 px-6">
+                <h3 className="text-4xl font-black uppercase tracking-tight text-md-on-surface">{t('readyTitle')}</h3>
+                <p className="text-lg font-bold text-md-on-surface-variant leading-relaxed uppercase tracking-widest opacity-70">{t('readyDesc')}</p>
               </div>
-              <button
-                onClick={checkUpdates}
-                className="group relative flex items-center gap-3 overflow-hidden rounded-2xl bg-slate-900 px-8 py-4 text-lg font-bold text-white shadow-xl transition-all hover:scale-105 hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-gray-100"
-              >
-                <RefreshCw className="h-6 w-6 transition-transform group-hover:rotate-180" />
-                {t('checkUpdates')}
-              </button>
-              <p className="text-xl sm:text-2xl mt-8 font-bold text-slate-700 dark:text-slate-400 animate-in fade-in slide-in-from-top-2 duration-700 delay-300 max-w-2xl px-4 leading-relaxed">
-                {t('footerLove')} <span className="text-blue-600 dark:text-blue-400">Samuel</span>.
+
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-md-primary/20 blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
+                <button
+                  onClick={checkUpdates}
+                  className="relative group flex items-center gap-4 overflow-hidden rounded-[24px] bg-md-primary px-10 py-6 text-xl font-black uppercase tracking-widest text-md-on-primary shadow-2xl transition-all hover:scale-[1.05] active:scale-95"
+                >
+                  <RefreshCw className="h-8 w-8 transition-transform duration-700 group-hover:rotate-180" />
+                  {t('checkUpdates')}
+                </button>
+              </div>
+
+              <p className="text-sm font-black text-md-on-surface-variant/40 uppercase tracking-[0.3em] max-w-2xl px-8 leading-loose transition-all hover:text-md-primary/50 cursor-default">
+                {t('footerLove')} <span className="text-md-primary">Samuel</span>.
                 <br />
                 {t('footerAI')}
-                <span className="inline-block align-middle ml-2 animate-pulse">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-red-500" style={{ shapeRendering: 'crispEdges' }}>
+                <span className="inline-block align-middle ml-3">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-md-error opacity-70 animate-pulse">
                     <path d="M4 4h4v4H4zM16 4h4v4h-4zM2 8h4v4H2zM8 8h8v4H8zM18 8h4v4h-4zM2 12h4v4H2zM6 16h4v4H6zM10 20h4v4h-4zM14 16h4v4h-4zM18 12h4v4h-4z" fill="currentColor" />
                   </svg>
                 </span>
@@ -905,8 +937,8 @@ export default function App() {
                       res.status === 'reboot' ? "bg-blue-600 text-white" :
                         res.status === 'in-use' ? "bg-amber-500 text-white" :
                           res.status === 'inapplicable' ? "bg-amber-500 text-white" :
-                        res.status === 'security-error' ? "bg-orange-600 text-white" :
-                          "bg-red-500 text-white"
+                            res.status === 'security-error' ? "bg-orange-600 text-white" :
+                              "bg-red-500 text-white"
                   )}>
                     {res.status === 'success' && <CheckCircle className="h-5 w-5" />}
                     {res.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
