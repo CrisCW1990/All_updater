@@ -3,7 +3,7 @@ import { clsx } from 'clsx';
 import { LayoutDashboard, History, Moon, Sun, Languages, Info, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
-import logo from '../assets/logo.png';
+import logo from '/icon.ico';
 import { TroubleshootingModal } from './TroubleshootingModal';
 
 interface LayoutProps {

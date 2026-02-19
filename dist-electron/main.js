@@ -1,27 +1,27 @@
 import { app as a, ipcMain as w, BrowserWindow as d, dialog as u } from "electron";
 import r from "path";
-import l from "node:fs";
+import c from "node:fs";
 import { fileURLToPath as h } from "url";
 const g = h(import.meta.url), m = r.dirname(g);
 process.env.DIST = r.join(m, "../dist");
 process.env.VITE_PUBLIC = a.isPackaged ? process.env.DIST : r.join(process.env.DIST, "../public");
 if (a.isPackaged) {
   const t = process.env.PORTABLE_EXECUTABLE_DIR || r.dirname(a.getPath("exe")), e = r.join(t, "data");
-  let n = e;
+  let o = e;
   try {
-    l.mkdirSync(e, { recursive: !0 });
-    const i = r.join(e, ".all-updater-write-test");
-    l.writeFileSync(i, "ok", "utf8"), l.unlinkSync(i);
-  } catch (i) {
-    console.warn("[Main] Portable data folder is not writable. Falling back to roaming appData.", i);
+    c.mkdirSync(e, { recursive: !0 });
+    const n = r.join(e, ".all-updater-write-test");
+    c.writeFileSync(n, "ok", "utf8"), c.unlinkSync(n);
+  } catch (n) {
+    console.warn("[Main] Portable data folder is not writable. Falling back to roaming appData.", n);
     try {
       const s = r.join(a.getPath("appData"), "All Updater", "data");
-      l.mkdirSync(s, { recursive: !0 }), n = s;
+      c.mkdirSync(s, { recursive: !0 }), o = s;
     } catch (s) {
       console.warn("[Main] Roaming appData fallback is not writable. Keeping default userData path.", s);
     }
   }
-  a.setPath("userData", n);
+  a.setPath("userData", o);
 }
 async function y() {
   try {
@@ -29,7 +29,7 @@ async function y() {
     return await t("net", ["session"], { reject: !0 }), !0;
   } catch {
     try {
-      const { execa: t } = await import("./index-CWXQCQWA.js").then((n) => n.i), { stdout: e } = await t("powershell", [
+      const { execa: t } = await import("./index-CWXQCQWA.js").then((o) => o.i), { stdout: e } = await t("powershell", [
         "-NoProfile",
         "-NonInteractive",
         "-Command",
@@ -41,11 +41,11 @@ async function y() {
     }
   }
 }
-let o, c = !1;
+let i, l = !1;
 const p = process.env.VITE_DEV_SERVER_URL;
 function f() {
   let t = !1;
-  o = new d({
+  i = new d({
     width: 1200,
     height: 800,
     webPreferences: {
@@ -55,9 +55,9 @@ function f() {
     },
     autoHideMenuBar: !0,
     title: "All Updater",
-    icon: r.join(process.env.VITE_PUBLIC, "logo.png")
-  }), o.on("close", (e) => {
-    t || c && (e.preventDefault(), u.showMessageBoxSync(o, {
+    icon: r.join(process.env.VITE_PUBLIC, "icon.ico")
+  }), i.on("close", (e) => {
+    t || l && (e.preventDefault(), u.showMessageBoxSync(i, {
       type: "warning",
       buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
       title: "Operation in Progress / Operacion en progreso",
@@ -68,13 +68,13 @@ Hay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede de
 Se recomienda esperar a que el proceso termine.`,
       defaultId: 0,
       cancelId: 0
-    }) === 1 && (t = !0, c = !1, o?.close()));
-  }), o.webContents.on("did-finish-load", () => {
-    o?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  }), p ? o.loadURL(p) : o.loadFile(r.join(process.env.DIST || "", "index.html"));
+    }) === 1 && (t = !0, l = !1, i?.close()));
+  }), i.webContents.on("did-finish-load", () => {
+    i?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), p ? i.loadURL(p) : i.loadFile(r.join(process.env.DIST || "", "index.html"));
 }
 w.handle("system:set-operation-active", (t, e) => {
-  c = e;
+  l = e;
 });
 a.on("window-all-closed", () => {
   process.platform !== "darwin" && a.quit();

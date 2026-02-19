@@ -77,7 +77,7 @@ function createWindow() {
         },
         autoHideMenuBar: true,
         title: "All Updater",
-        icon: path.join(process.env.VITE_PUBLIC as string, 'logo.png')
+        icon: path.join(process.env.VITE_PUBLIC as string, 'icon.ico')
     })
 
     // Protection against closing while updating
