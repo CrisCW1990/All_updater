@@ -36,6 +36,24 @@ export interface RestorePointResult {
     success: boolean;
     reason?: RestoreFailureReason;
     details?: string;
+    sequenceNumber?: number;
+    description?: string;
+}
+
+export type ServiceRuntimeStatus = 'running' | 'stopped' | 'paused' | 'missing' | 'unknown';
+export type ServiceStartupType = 'automatic' | 'manual' | 'disabled' | 'unknown';
+
+export interface ServiceState {
+    status: ServiceRuntimeStatus;
+    startType: ServiceStartupType;
+}
+
+export interface RestorePointVerificationResult {
+    confirmed: boolean;
+    sequenceNumber: number;
+    expectedDescription: string;
+    actualDescription?: string;
+    details?: string;
 }
 
 export interface AppVersionCheckResult {
@@ -79,6 +97,7 @@ export interface PreflightResult {
         restoreQuery: boolean;
     };
     details: Partial<Record<'admin' | 'winget' | 'vssService' | 'taskScheduler' | 'restoreQuery', string>>;
+    serviceStates?: Partial<Record<'vssService' | 'taskScheduler', ServiceState>>;
 }
 
 export interface DiagnosticsExportResult {

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, ShieldAlert, X, Wrench, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ShieldAlert, X, Wrench, ChevronRight, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-import type { PreflightResult } from '../shared/types';
+import type { PreflightResult, ServiceRuntimeStatus, ServiceStartupType } from '../shared/types';
 import { clsx } from 'clsx';
 
 interface PreflightModalProps {
@@ -21,6 +21,15 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
     onCancel
 }) => {
     const { t } = useLanguage();
+    const [actionError, setActionError] = React.useState<string | null>(null);
+    const handleCancel = React.useCallback(() => {
+        setActionError(null);
+        onCancel();
+    }, [onCancel]);
+    const handleContinue = React.useCallback(() => {
+        setActionError(null);
+        onContinue();
+    }, [onContinue]);
     const checks: CheckKey[] = ['admin', 'winget', 'vssService', 'taskScheduler', 'restoreQuery'];
     const canContinue = result?.overall !== 'error';
     const continueRef = useRef<HTMLButtonElement>(null);
@@ -31,6 +40,69 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
         taskScheduler: 'preflightCheckTaskScheduler',
         restoreQuery: 'preflightCheckRestoreQuery'
     };
+    const runtimeKeyMap: Record<ServiceRuntimeStatus, Parameters<typeof t>[0]> = {
+        running: 'preflightRuntimeRunning',
+        stopped: 'preflightRuntimeStopped',
+        paused: 'preflightRuntimePaused',
+        missing: 'preflightRuntimeMissing',
+        unknown: 'preflightRuntimeUnknown'
+    };
+    const startupKeyMap: Record<ServiceStartupType, Parameters<typeof t>[0]> = {
+        automatic: 'preflightStartupAutomatic',
+        manual: 'preflightStartupManual',
+        disabled: 'preflightStartupDisabled',
+        unknown: 'preflightStartupUnknown'
+    };
+
+    const stripStructuredDetail = (detail: string, prefix: string): string => {
+        if (!detail.startsWith(prefix)) return detail;
+        return detail.slice(prefix.length).trim();
+    };
+
+    const getCheckDetail = (key: CheckKey): string | undefined => {
+        if (!result) return undefined;
+        const fallback = result.details[key];
+        if (key === 'admin' && fallback) {
+            if (fallback.startsWith('code=not-elevated')) {
+                return [t('preflightAdminAdvice'), t('preflightNoAutoFix')].join('\n');
+            }
+            if (fallback.startsWith('code=admin-check-failed;')) {
+                const output = stripStructuredDetail(fallback, 'code=admin-check-failed; output=');
+                return [t('preflightAdminCheckFailed'), output].join('\n');
+            }
+            return fallback;
+        }
+
+        if (key === 'winget' && fallback) {
+            if (fallback.startsWith('code=winget-missing')) {
+                return [t('preflightWingetMissingAdvice'), t('preflightNoAutoFix')].join('\n');
+            }
+            if (fallback.startsWith('code=winget-error;')) {
+                const output = stripStructuredDetail(fallback, 'code=winget-error; output=');
+                return [t('preflightWingetGeneralAdvice'), output].join('\n');
+            }
+            return fallback;
+        }
+
+        if (key !== 'vssService' && key !== 'taskScheduler') return fallback;
+
+        const serviceState = result.serviceStates?.[key];
+        if (!serviceState) return fallback;
+
+        const lines = [
+            `${t('preflightServiceRuntime')}: ${t(runtimeKeyMap[serviceState.status])}`,
+            `${t('preflightServiceStartup')}: ${t(startupKeyMap[serviceState.startType])}`
+        ];
+
+        if (serviceState.startType === 'disabled') {
+            lines.push(key === 'vssService' ? t('preflightVssAdviceDisabled') : t('preflightTaskAdviceDisabled'));
+        } else if (serviceState.status !== 'running') {
+            lines.push(key === 'vssService' ? t('preflightVssAdviceNotRunning') : t('preflightTaskAdviceNotRunning'));
+        }
+
+        lines.push(t('preflightNoAutoFix'));
+        return lines.join('\n');
+    };
 
     useEffect(() => {
         if (!isOpen || !result) return;
@@ -38,17 +110,25 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                onCancel();
+                handleCancel();
             } else if (event.key === 'Enter' && canContinue) {
                 event.preventDefault();
-                onContinue();
+                handleContinue();
             }
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [canContinue, isOpen, onCancel, onContinue, result]);
+    }, [canContinue, handleCancel, handleContinue, isOpen, result]);
 
     if (!isOpen || !result) return null;
+
+    const runQuickAction = (action: () => Promise<void>) => {
+        setActionError(null);
+        void action().catch((error) => {
+            console.error('[PreflightModal] Quick action failed:', error);
+            setActionError(t('preflightActionFailed'));
+        });
+    };
 
     return (
         <AnimatePresence>
@@ -57,7 +137,7 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    onClick={onCancel}
+                    onClick={handleCancel}
                     className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 />
 
@@ -78,7 +158,7 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
                             </div>
                         </div>
                         <button
-                            onClick={onCancel}
+                            onClick={handleCancel}
                             className="absolute top-6 right-6 p-2 rounded-full hover:bg-md-on-primary-container/10 text-md-on-primary-container transition-colors"
                         >
                             <X className="h-5 w-5" />
@@ -100,7 +180,7 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
                         <div className="space-y-3 max-h-[340px] overflow-y-auto pr-2 custom-scrollbar">
                             {checks.map((key) => {
                                 const ok = result.checks[key];
-                                const detail = result.details[key];
+                                const detail = getCheckDetail(key);
                                 return (
                                     <div
                                         key={key}
@@ -129,15 +209,70 @@ export const PreflightModal: React.FC<PreflightModalProps> = ({
                             })}
                         </div>
 
+                        {(!result.checks.winget || !result.checks.vssService || !result.checks.taskScheduler || !result.checks.restoreQuery) && (
+                            <div className="rounded-2xl border border-md-outline-variant/30 bg-md-surface-container-low p-4">
+                                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-md-on-surface-variant opacity-70">
+                                    {t('preflightQuickActions')}
+                                </p>
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    {!result.checks.winget && (
+                                        <button
+                                            onClick={() => {
+                                                runQuickAction(async () => {
+                                                    await window.ipcRenderer.invoke('system:open-url', 'https://aka.ms/getwinget');
+                                                });
+                                            }}
+                                            className="rounded-xl border border-md-primary/20 bg-md-surface px-3 py-2 text-xs font-bold text-md-primary transition-colors hover:bg-md-primary/10"
+                                        >
+                                            <span className="inline-flex items-center gap-1">
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                {t('preflightActionGetWinget')}
+                                            </span>
+                                        </button>
+                                    )}
+                                    {(!result.checks.vssService || !result.checks.taskScheduler) && (
+                                        <button
+                                            onClick={() => {
+                                                runQuickAction(async () => {
+                                                    await window.ipcRenderer.invoke('system:open-services-console');
+                                                });
+                                            }}
+                                            className="rounded-xl border border-md-outline/20 bg-md-surface px-3 py-2 text-xs font-bold text-md-on-surface transition-colors hover:bg-md-surface-variant/30"
+                                        >
+                                            {t('preflightActionOpenServices')}
+                                        </button>
+                                    )}
+                                    {(!result.checks.restoreQuery || !result.checks.vssService || !result.checks.taskScheduler) && (
+                                        <button
+                                            onClick={() => {
+                                                runQuickAction(async () => {
+                                                    await window.ipcRenderer.invoke('system:open-system-restore');
+                                                });
+                                            }}
+                                            className="rounded-xl border border-md-outline/20 bg-md-surface px-3 py-2 text-xs font-bold text-md-on-surface transition-colors hover:bg-md-surface-variant/30"
+                                        >
+                                            {t('preflightActionOpenSystemProtection')}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {actionError && (
+                            <div className="rounded-xl bg-md-error-container p-3 text-xs font-bold text-md-on-error-container">
+                                {actionError}
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4 pt-2">
                             <button
-                                onClick={onCancel}
+                                onClick={handleCancel}
                                 className="rounded-full px-6 py-4 text-sm font-black text-md-on-surface-variant hover:bg-md-surface-variant/50 transition-all active:scale-95"
                             >
                                 {t('preflightCancel')}
                             </button>
                             <button
-                                onClick={onContinue}
+                                onClick={handleContinue}
                                 disabled={!canContinue}
                                 ref={continueRef}
                                 className={clsx(

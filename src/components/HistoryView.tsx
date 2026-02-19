@@ -13,7 +13,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [filter, setFilter] = useState<'all' | 'success' | 'issues' | 'reboot' | 'security'>('all');
+    const [filter, setFilter] = useState<'all' | 'success' | 'issues' | 'failed' | 'inUse' | 'inapplicable' | 'reboot' | 'security'>('all');
 
     useEffect(() => {
         const loadHistory = async () => {
@@ -80,6 +80,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
         if (filter === 'all') return true;
         if (filter === 'success') return item.status === 'success';
         if (filter === 'issues') return item.status === 'failed' || item.status === 'inapplicable' || item.status === 'in-use' || item.status === 'skipped';
+        if (filter === 'failed') return item.status === 'failed';
+        if (filter === 'inUse') return item.status === 'in-use';
+        if (filter === 'inapplicable') return item.status === 'inapplicable';
         if (filter === 'reboot') return item.status === 'reboot';
         if (filter === 'security') return item.status === 'security-error';
         return true;
@@ -88,8 +91,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     return (
         <div className="space-y-6 relative">
             {showClearConfirm && (
-                <div className="absolute top-0 right-0 left-0 z-50 flex items-center justify-between p-4 bg-md-surface-container-high rounded-lg shadow-xl border border-md-error/30 animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center gap-3">
+                <div className="absolute top-0 right-0 left-0 z-50 flex flex-col gap-3 p-4 bg-md-surface-container-high rounded-lg shadow-xl border border-md-error/30 animate-in fade-in slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
                         <div className="p-2 bg-md-error-container rounded-full text-md-error">
                             <AlertCircle className="h-5 w-5" />
                         </div>
@@ -98,7 +101,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                             <p className="text-xs font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest">{t('resetAppMessage')}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
                             onClick={() => setShowClearConfirm(false)}
                             className="px-3 py-1.5 text-xs font-black uppercase tracking-widest text-md-on-surface-variant hover:bg-md-on-surface/5 rounded-md transition-colors"
@@ -115,7 +118,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                 </div>
             )}
 
-            <header className="flex items-center justify-between">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="text-2xl font-black uppercase tracking-tight text-md-on-surface transition-colors">{t('history')}</h2>
                     <p className="text-sm font-black text-md-on-surface-variant opacity-70 uppercase tracking-widest">
@@ -138,6 +141,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                         { id: 'all', label: t('historyFilterAll') },
                         { id: 'success', label: t('historyFilterSuccess') },
                         { id: 'issues', label: t('historyFilterIssues') },
+                        { id: 'failed', label: t('historyFilterFailed') },
+                        { id: 'inUse', label: t('historyFilterInUse') },
+                        { id: 'inapplicable', label: t('historyFilterInapplicable') },
                         { id: 'reboot', label: t('historyFilterReboot') },
                         { id: 'security', label: t('historyFilterSecurity') }
                     ].map((option) => (

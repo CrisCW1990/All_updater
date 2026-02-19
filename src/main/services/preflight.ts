@@ -1,5 +1,5 @@
 import { execa } from 'execa';
-import type { PreflightResult } from '../../shared/types';
+import type { PreflightResult, ServiceRuntimeStatus, ServiceStartupType } from '../../shared/types';
 
 type DetailKey = 'admin' | 'winget' | 'vssService' | 'taskScheduler' | 'restoreQuery';
 
@@ -31,29 +31,78 @@ export class PreflightService {
                 const ok = result.stdout.trim().toLowerCase() === 'true';
                 return ok
                     ? { ok: true }
-                    : { ok: false, detail: 'Administrator privileges are not active.' };
+                    : { ok: false, detail: 'code=not-elevated' };
             } catch (error) {
-                return { ok: false, detail: String(error) };
+                return { ok: false, detail: `code=admin-check-failed; output=${String(error)}` };
             }
         }
     }
 
     private async checkWinget(): Promise<{ ok: boolean; detail?: string }> {
-        const result = await execa('winget', ['--version'], { reject: false });
-        if (result.exitCode === 0) return { ok: true };
-        const detail = `${result.stdout || ''}\n${result.stderr || ''}`.trim() || `exitCode=${result.exitCode ?? 'null'}`;
-        return { ok: false, detail };
+        try {
+            const result = await execa('winget', ['--version'], { reject: false });
+            if (result.exitCode === 0) return { ok: true };
+            const detail = `${result.stdout || ''}\n${result.stderr || ''}`.trim() || `exitCode=${result.exitCode ?? 'null'}`;
+            const normalized = detail.toLowerCase();
+            if (
+                /not found|not recognized|no se reconoce|enoent|comando no encontrado/.test(normalized)
+            ) {
+                return { ok: false, detail: 'code=winget-missing' };
+            }
+            return { ok: false, detail: `code=winget-error; output=${detail}` };
+        } catch (error) {
+            const detail = String(error);
+            const normalized = detail.toLowerCase();
+            if (
+                /not found|not recognized|no se reconoce|enoent|comando no encontrado|resourceunavailable/.test(normalized)
+            ) {
+                return { ok: false, detail: 'code=winget-missing' };
+            }
+            return { ok: false, detail: `code=winget-error; output=${detail}` };
+        }
     }
 
-    private async checkService(serviceName: string): Promise<{ ok: boolean; detail?: string }> {
+    private normalizeRuntimeStatus(raw: string): ServiceRuntimeStatus {
+        const normalized = raw.trim().toLowerCase();
+        if (normalized === 'running') return 'running';
+        if (normalized === 'stopped') return 'stopped';
+        if (normalized === 'paused') return 'paused';
+        if (normalized === 'missing') return 'missing';
+        return 'unknown';
+    }
+
+    private normalizeStartupType(raw: string): ServiceStartupType {
+        const normalized = raw.trim().toLowerCase();
+        if (normalized === 'auto' || normalized === 'automatic' || normalized === 'automaticdelayedstart') return 'automatic';
+        if (normalized === 'manual') return 'manual';
+        if (normalized === 'disabled') return 'disabled';
+        return 'unknown';
+    }
+
+    private async checkService(serviceName: string): Promise<{ ok: boolean; detail?: string; state: { status: ServiceRuntimeStatus; startType: ServiceStartupType } }> {
         const result = await this.runPowerShell(
-            `$svc = Get-Service -Name '${serviceName}' -ErrorAction SilentlyContinue; if ($null -eq $svc) { 'missing' } else { if ($svc.StartType -eq 'Disabled') { 'disabled' } else { $svc.Status } }`
+            `$svc = Get-CimInstance Win32_Service -Filter "Name='${serviceName}'" -ErrorAction SilentlyContinue; if ($null -eq $svc) { 'missing|unknown' } else { "$($svc.State)|$($svc.StartMode)" }`
         );
 
-        const status = result.stdout.trim().toLowerCase();
-        if (status === 'running' || status === 'stopped') return { ok: true };
-        if (!status) return { ok: false, detail: result.stderr.trim() || 'Unknown service status' };
-        return { ok: false, detail: status };
+        const raw = result.stdout.trim();
+        if (!raw) {
+            return {
+                ok: false,
+                detail: result.stderr.trim() || 'runtime=unknown; startup=unknown',
+                state: { status: 'unknown', startType: 'unknown' }
+            };
+        }
+
+        const [rawStatus = 'unknown', rawStartType = 'unknown'] = raw.split('|');
+        const status = this.normalizeRuntimeStatus(rawStatus);
+        const startType = this.normalizeStartupType(rawStartType);
+        const detail = `runtime=${status}; startup=${startType}`;
+        const ok = status === 'running' && startType !== 'disabled';
+        return {
+            ok,
+            detail,
+            state: { status, startType }
+        };
     }
 
     private async checkRestoreQuery(): Promise<{ ok: boolean; detail?: string }> {
@@ -101,7 +150,11 @@ export class PreflightService {
                 success: true,
                 overall,
                 checks,
-                details
+                details,
+                serviceStates: {
+                    vssService: vssService.state,
+                    taskScheduler: taskScheduler.state
+                }
             };
         } catch (error) {
             return {
@@ -116,6 +169,10 @@ export class PreflightService {
                 },
                 details: {
                     admin: String(error)
+                },
+                serviceStates: {
+                    vssService: { status: 'unknown', startType: 'unknown' },
+                    taskScheduler: { status: 'unknown', startType: 'unknown' }
                 }
             };
         }

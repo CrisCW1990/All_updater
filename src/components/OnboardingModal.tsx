@@ -56,6 +56,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                         <Languages className="h-10 w-10" />
                                     </div>
                                 </div>
+
                                 <h2 className="text-3xl font-black text-md-on-surface mb-2 tracking-tight">
                                     Choose Your Dialect
                                 </h2>

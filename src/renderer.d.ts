@@ -6,7 +6,8 @@ import type {
     AppVersionCheckResult,
     HistoryItem,
     PreflightResult,
-    RestorePointResult
+    RestorePointResult,
+    RestorePointVerificationResult
 } from './shared/types';
 
 interface SystemInfo {
@@ -31,6 +32,7 @@ export interface IElectronAPI {
     invoke(channel: 'winget:check-updates'): Promise<AppUpdate[]>;
     invoke(channel: 'winget:install-update', id: string): Promise<void>;
     invoke(channel: 'system:create-restore-point', description: string): Promise<RestorePointResult>;
+    invoke(channel: 'system:verify-restore-point', sequenceNumber: number, description: string): Promise<RestorePointVerificationResult>;
     invoke(channel: 'system:open-logs'): Promise<void>;
     invoke(channel: 'system:is-elevated'): Promise<boolean>;
     invoke(channel: 'system:get-info'): Promise<SystemInfo>;
@@ -39,6 +41,8 @@ export interface IElectronAPI {
     invoke(channel: 'system:set-operation-active', active: boolean): Promise<void>;
     invoke(channel: 'system:open-url', url: string): Promise<void>;
     invoke(channel: 'system:show-item-in-folder', targetPath: string): Promise<void>;
+    invoke(channel: 'system:open-system-restore'): Promise<void>;
+    invoke(channel: 'system:open-services-console'): Promise<void>;
     invoke(channel: 'system:check-app-update'): Promise<AppVersionCheckResult>;
     invoke(channel: 'system:download-app-update', assetUrl: string, fileName: string, expectedSha256?: string): Promise<AppUpdateDownloadResult>;
     invoke(channel: 'system:run-preflight'): Promise<PreflightResult>;

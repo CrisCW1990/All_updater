@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Layout } from './components/Layout';
 import { UpdateCard } from './components/UpdateCard';
 import { RestoreModal } from './components/RestoreModal';
 import { RestoreFailureModal } from './components/RestoreFailureModal';
+import { RestoreVerificationAlertModal } from './components/RestoreVerificationAlertModal';
 import { PreflightModal } from './components/PreflightModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ConflictModal } from './components/ConflictModal';
@@ -15,9 +16,10 @@ import type {
   HistoryItem,
   PreflightResult,
   RestoreFailureReason,
-  RestorePointResult
+  RestorePointResult,
+  RestorePointVerificationResult
 } from './shared/types';
-import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
+import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText, Wifi, WifiOff } from 'lucide-react';
 import { ToastContainer, type ToastType } from './components/Toast';
 import { useLanguage } from './context/LanguageContext';
 import { clsx } from 'clsx';
@@ -28,7 +30,49 @@ interface ToastItem {
   type: ToastType;
 }
 
+interface RestoreVerificationSummaryState {
+  status: 'confirmed' | 'missing' | 'unverified';
+  message: string;
+  details?: string;
+}
+
 type ThemeMode = 'dark' | 'light' | 'system';
+type AppProgressMode = 'real' | 'estimated';
+
+const parsePercentFromWingetLog = (logLine: string): number | null => {
+  const matches = Array.from(logLine.matchAll(/(^|[^0-9])([0-9]{1,3})%(?![0-9])/g));
+  if (matches.length === 0) return null;
+  const raw = Number(matches[matches.length - 1][2]);
+  if (!Number.isFinite(raw)) return null;
+  return Math.max(0, Math.min(100, raw));
+};
+
+const normalizeWingetLog = (value: string): string => (
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+);
+
+const parseEstimatedPercentFromWingetLog = (logLine: string): number | null => {
+  const normalized = normalizeWingetLog(logLine);
+  const phaseRules: Array<{ percent: number, regex: RegExp }> = [
+    { percent: 12, regex: /\bstarting|iniciando|initializing|inicializando\b/ },
+    { percent: 28, regex: /\bdownloading|download|descargando|descarga|transferring|transfer\b/ },
+    { percent: 45, regex: /\bextract|unpack|decompress|descomprim|expandiendo\b/ },
+    { percent: 70, regex: /\binstalling|install|instaland|aplicando|applying|executing|ejecutando\b/ },
+    { percent: 84, regex: /\bverifying|verify|verificando|verificar|hash|checksum\b/ },
+    { percent: 95, regex: /\bfinalizing|finalizando|completing|completion|completado|completed|done|hecho|terminado|installed successfully|instalado correctamente\b/ }
+  ];
+
+  for (const rule of phaseRules) {
+    if (rule.regex.test(normalized)) {
+      return rule.percent;
+    }
+  }
+
+  return null;
+};
 
 export default function App() {
   const { t } = useLanguage();
@@ -43,8 +87,11 @@ export default function App() {
   const [isCreatingRestore, setIsCreatingRestore] = useState(false);
   const [conflictState, setConflictState] = useState<{ appName: string, onRetry: () => void, onSkip: () => void } | null>(null);
   const [restoreDecisionState, setRestoreDecisionState] = useState<{ message: string, details?: string, onContinue: () => void, onCancel: () => void } | null>(null);
+  const [restoreVerificationAlert, setRestoreVerificationAlert] = useState<{ message: string, details?: string } | null>(null);
   const [currentInstallingApp, setCurrentInstallingApp] = useState<string | null>(null);
   const [currentLogLine, setCurrentLogLine] = useState<string | null>(null);
+  const [currentAppProgress, setCurrentAppProgress] = useState<number | null>(null);
+  const [currentAppProgressMode, setCurrentAppProgressMode] = useState<AppProgressMode | null>(null);
   const [installProgress, setInstallProgress] = useState<{ current: number, total: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [showSummary, setShowSummary] = useState(false);
@@ -63,7 +110,13 @@ export default function App() {
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null);
   const [runningPreflight, setRunningPreflight] = useState(false);
   const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [restoreVerificationSummary, setRestoreVerificationSummary] = useState<RestoreVerificationSummaryState | null>(null);
   const initializedRef = useRef(false);
+  const themeSaveAttemptRef = useRef(0);
+  const historyWriteWarningShownRef = useRef(false);
+  const pendingSelectedIdsRef = useRef<Set<string> | null>(null);
+  const estimatedProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
   const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
   const getErrorMessage = (error: unknown): string => {
@@ -90,15 +143,52 @@ export default function App() {
     return true;
   };
 
+  const stopEstimatedAppProgress = useCallback(() => {
+    if (estimatedProgressTimerRef.current !== null) {
+      clearInterval(estimatedProgressTimerRef.current);
+      estimatedProgressTimerRef.current = null;
+    }
+  }, []);
+
+  const startEstimatedAppProgress = useCallback(() => {
+    stopEstimatedAppProgress();
+    setCurrentAppProgressMode('estimated');
+    estimatedProgressTimerRef.current = setInterval(() => {
+      setCurrentAppProgress((prev) => {
+        if (prev === null) return 3;
+        if (prev >= 92) return prev;
+        const step = prev < 25 ? 3 : prev < 55 ? 2 : 1;
+        return Math.min(prev + step, 92);
+      });
+    }, 1200);
+  }, [stopEstimatedAppProgress]);
+
   useEffect(() => {
     const handleLog = (_event: unknown, log: string) => {
       const cleanLog = log.replace(/\[#+ -+\]/g, '').trim();
-      if (cleanLog) setCurrentLogLine(cleanLog);
+      if (!cleanLog) return;
+      setCurrentLogLine(cleanLog);
+      const realPercent = parsePercentFromWingetLog(cleanLog);
+      if (realPercent !== null) {
+        stopEstimatedAppProgress();
+        setCurrentAppProgressMode('real');
+        setCurrentAppProgress((prev) => Math.max(prev ?? 0, realPercent));
+        return;
+      }
+
+      const estimatedPercent = parseEstimatedPercentFromWingetLog(cleanLog);
+      if (estimatedPercent !== null) {
+        setCurrentAppProgressMode((prev) => prev === 'real' ? prev : 'estimated');
+        setCurrentAppProgress((prev) => Math.max(prev ?? 0, estimatedPercent));
+      }
     };
 
     window.ipcRenderer.on('winget:log', handleLog);
-    return () => window.ipcRenderer.off('winget:log', handleLog);
-  }, []);
+    return () => {
+      window.ipcRenderer.off('winget:log', handleLog);
+      stopEstimatedAppProgress();
+    };
+  }, [stopEstimatedAppProgress]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -170,22 +260,32 @@ export default function App() {
     return () => mediaQuery.removeListener(handleChange);
   }, [themeMode]);
 
-  // Global Dark Mode Class
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', darkMode);
+    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
   }, [darkMode]);
 
   const toggleTheme = () => {
     const previousMode = themeMode;
     const previousDark = darkMode;
     const nextMode: ThemeMode = darkMode ? 'light' : 'dark';
+    const saveAttempt = ++themeSaveAttemptRef.current;
     setThemeMode(nextMode);
     setDarkMode(nextMode === 'dark');
     void window.ipcRenderer.invoke('settings:set', 'theme', nextMode).catch((error) => {
+      if (saveAttempt !== themeSaveAttemptRef.current) return;
       console.error('[App] Failed to persist theme:', error);
       setThemeMode(previousMode);
       setDarkMode(previousDark);
@@ -211,6 +311,18 @@ export default function App() {
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const addHistoryEntrySafely = async (entry: Omit<HistoryItem, 'date'>): Promise<void> => {
+    try {
+      await window.ipcRenderer.invoke('history:add', entry);
+    } catch (error) {
+      console.error('[App] Failed to write history entry:', error, entry);
+      if (!historyWriteWarningShownRef.current) {
+        historyWriteWarningShownRef.current = true;
+        addToast(t('historyWriteWarning'), 'warning');
+      }
+    }
   };
 
   const checkAppUpdate = async (silent = false) => {
@@ -334,7 +446,14 @@ export default function App() {
       setUpdates(available);
       // Only auto-select updates that are NOT inapplicable
       const installable = available.filter((u) => u.previousStatus !== 'inapplicable');
-      setSelectedIds(new Set(installable.map((u) => u.id)));
+      const installableIds = new Set(installable.map((u) => u.id));
+      setSelectedIds((previous) => {
+        const preserved = new Set(Array.from(previous).filter((id) => installableIds.has(id)));
+        if (preserved.size > 0 || (hasChecked && previous.size === 0)) {
+          return preserved;
+        }
+        return new Set(installable.map((u) => u.id));
+      });
       setHasChecked(true);
       setIsWingetMissing(false);
     } catch (error: unknown) {
@@ -391,8 +510,10 @@ export default function App() {
     }
   };
 
-  const handleUpdateClick = async () => {
-    if (selectedIds.size === 0) return;
+  const handleUpdateClick = async (selectedOverride?: Set<string>) => {
+    const effectiveSelected = selectedOverride ?? selectedIds;
+    if (effectiveSelected.size === 0) return;
+    pendingSelectedIdsRef.current = new Set(effectiveSelected);
     setRunningPreflight(true);
     try {
       const result = await window.ipcRenderer.invoke('system:run-preflight');
@@ -425,7 +546,19 @@ export default function App() {
     setShowRestoreModal(false);
     setIsInstalling(true);
     setBatchResults([]);
+    setRestoreVerificationSummary(null);
+    historyWriteWarningShownRef.current = false;
     let operationMarked = false;
+    let createdRestoreMeta: { sequenceNumber: number; description: string } | null = null;
+    const selectedSnapshot = pendingSelectedIdsRef.current
+      ? new Set(pendingSelectedIdsRef.current)
+      : new Set(selectedIds);
+    pendingSelectedIdsRef.current = null;
+    if (selectedSnapshot.size === 0) {
+      setIsInstalling(false);
+      addToast(t('summaryRetryNothing'), 'info');
+      return;
+    }
     try {
       await window.ipcRenderer.invoke('system:set-operation-active', true);
       operationMarked = true;
@@ -447,6 +580,11 @@ export default function App() {
               return;
             }
             addToast(t('restoreContinueWithoutPoint'), "warning");
+          } else if (typeof result.sequenceNumber === 'number' && typeof result.description === 'string') {
+            createdRestoreMeta = {
+              sequenceNumber: result.sequenceNumber,
+              description: result.description
+            };
           }
         } catch (e) {
           console.error("Failed to create restore point", e);
@@ -466,12 +604,12 @@ export default function App() {
         }
       }
 
-      const total = selectedIds.size;
+      const total = selectedSnapshot.size;
       let current = 0;
       const currentResults: HistoryItem[] = [];
       setInstallProgress({ current, total });
 
-      const queue = Array.from(selectedIds);
+      const queue = Array.from(selectedSnapshot);
 
       // Iteration using while to allow "retry" without complex index math
       let i = 0;
@@ -483,6 +621,10 @@ export default function App() {
 
         try {
           setCurrentInstallingApp(appName);
+          setCurrentLogLine(null);
+          setCurrentAppProgress(3);
+          setCurrentAppProgressMode('estimated');
+          startEstimatedAppProgress();
 
           // Wait for conflict resolution if needed
           let retry = true;
@@ -524,10 +666,13 @@ export default function App() {
             previousVersion: update?.version, // This is the old version
             status: 'success'
           };
-          await window.ipcRenderer.invoke('history:add', historyEntry);
+          await addHistoryEntrySafely(historyEntry);
           currentResults.push({ ...historyEntry, date: new Date().toISOString() });
 
           addToast(`${t('updateSuccess')} ${appName}`, 'success');
+          stopEstimatedAppProgress();
+          setCurrentAppProgressMode('real');
+          setCurrentAppProgress(100);
 
           setUpdates(prev => prev.filter(u => u.id !== id));
           setSelectedIds(prev => {
@@ -542,6 +687,7 @@ export default function App() {
           const isReboot = errorMessage.includes('RebootRequired');
           const isInUse = errorMessage.includes('AppInUse');
           const isSecurity = errorMessage.includes('HashMismatch');
+          const isFileLockDetected = errorMessage.includes('FileLockDetected');
 
           let status: 'failed' | 'inapplicable' | 'reboot' | 'in-use' | 'security-error' = 'failed';
           if (isInapplicable) status = 'inapplicable';
@@ -557,22 +703,94 @@ export default function App() {
             status,
             details: errorMessage
           };
-          await window.ipcRenderer.invoke('history:add', historyEntry);
+          await addHistoryEntrySafely(historyEntry);
           currentResults.push({ ...historyEntry, date: new Date().toISOString() });
 
           if (isInapplicable) {
             addToast(`${appName}: ${t('updateSkipped')}`, 'warning');
           } else if (isSecurity) {
             addToast(`${appName}: ${t('updateSecuritySkipped')}`, 'error');
+          } else if (isReboot) {
+            addToast(`${appName}: ${t('updateRebootPending')}`, 'warning');
+            setUpdates(prev => prev.filter(u => u.id !== id));
+            setSelectedIds(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
           } else if (isInUse) {
             addToast(`${appName}: ${t('updateInUseSkipped')}`, 'warning');
+          } else if (isFileLockDetected) {
+            addToast(`${appName}: ${t('updateFileLockDetected')}`, 'warning');
           } else {
             addToast(`${t('updateFailed')} ${appName}`, 'error');
           }
         }
         current++;
         setInstallProgress({ current, total });
+        stopEstimatedAppProgress();
+        setCurrentAppProgress(null);
+        setCurrentAppProgressMode(null);
         i++;
+      }
+
+      if (createdRestoreMeta) {
+        try {
+          const verification = await window.ipcRenderer.invoke(
+            'system:verify-restore-point',
+            createdRestoreMeta.sequenceNumber,
+            createdRestoreMeta.description
+          ) as RestorePointVerificationResult;
+
+          if (!verification.confirmed) {
+            const message = t('restorePostBatchMissing');
+            const detailLines = [
+              `${t('restoreSequenceLabel')}: ${verification.sequenceNumber}`,
+              `${t('restoreExpectedDescriptionLabel')}: ${verification.expectedDescription}`
+            ];
+
+            if (verification.actualDescription) {
+              detailLines.push(`${t('restoreActualDescriptionLabel')}: ${verification.actualDescription}`);
+            }
+            if (verification.details) {
+              detailLines.push(verification.details);
+            }
+
+            setRestoreVerificationAlert({
+              message,
+              details: detailLines.join('\n')
+            });
+            setRestoreVerificationSummary({
+              status: 'missing',
+              message,
+              details: detailLines.join('\n')
+            });
+            addToast(message, 'error');
+          } else {
+            const detailLines = [
+              `${t('restoreSequenceLabel')}: ${verification.sequenceNumber}`,
+              `${t('restoreExpectedDescriptionLabel')}: ${verification.expectedDescription}`
+            ];
+            if (verification.actualDescription) {
+              detailLines.push(`${t('restoreActualDescriptionLabel')}: ${verification.actualDescription}`);
+            }
+            setRestoreVerificationSummary({
+              status: 'confirmed',
+              message: t('restorePostBatchConfirmed'),
+              details: detailLines.join('\n')
+            });
+          }
+        } catch (verificationError) {
+          const message = t('restorePostBatchUnverified');
+          const details = getErrorMessage(verificationError);
+          setRestoreVerificationAlert({ message, details });
+          setRestoreVerificationSummary({
+            status: 'unverified',
+            message,
+            details
+          });
+          addToast(message, 'warning');
+        }
       }
 
       setBatchResults(currentResults);
@@ -580,11 +798,14 @@ export default function App() {
         setShowSummary(true);
       }
     } finally {
+      stopEstimatedAppProgress();
       setIsInstalling(false);
       setIsCreatingRestore(false);
       setInstallProgress(null);
       setCurrentInstallingApp(null);
       setCurrentLogLine(null);
+      setCurrentAppProgress(null);
+      setCurrentAppProgressMode(null);
       setConflictState(null);
       setRestoreDecisionState(null);
       setPreflightResult(null);
@@ -598,6 +819,37 @@ export default function App() {
     }
   };
 
+  const retryFailedFromSummary = async () => {
+    const retryableStatuses = new Set(['failed', 'in-use', 'inapplicable', 'security-error']);
+    const availableIds = new Set(updates.map((u) => u.id));
+    const retryIds = batchResults
+      .filter((item) => retryableStatuses.has(item.status))
+      .map((item) => item.id)
+      .filter((id) => availableIds.has(id));
+
+    if (retryIds.length === 0) {
+      addToast(t('summaryRetryNothing'), 'info');
+      return;
+    }
+
+    setSelectedIds(new Set(retryIds));
+    setShowSummary(false);
+    await handleUpdateClick(new Set(retryIds));
+  };
+
+  const summaryTotal = batchResults.length;
+  const summaryFailedCount = batchResults.filter(
+    r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
+  ).length;
+  const retryableStatuses = new Set(['failed', 'in-use', 'inapplicable', 'security-error']);
+  const availableUpdateIds = new Set(updates.map((u) => u.id));
+  const retryableSummaryIds = batchResults
+    .filter((r) => retryableStatuses.has(r.status))
+    .map((r) => r.id)
+    .filter((id) => availableUpdateIds.has(id));
+  const hasRetryableSummaryItems = retryableSummaryIds.length > 0;
+
+
   return (
     <Layout
       darkMode={darkMode}
@@ -608,7 +860,7 @@ export default function App() {
       {activeTab === 'dashboard' ? (
         <div className="mx-auto flex w-full h-full flex-col gap-8">
           {/* Dashboard Header - M3 Style */}
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between px-2">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between px-2">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <div className="h-2 w-2 rounded-full bg-md-primary animate-pulse" />
@@ -621,6 +873,15 @@ export default function App() {
                     {systemInfo.arch} <span className="opacity-30">|</span> {systemInfo.locale}
                   </span>
                 )}
+                <span className={clsx(
+                  "flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border",
+                  isOnline
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300"
+                )}>
+                  {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+                  {isOnline ? t('networkOnline') : t('networkOffline')}
+                </span>
               </div>
             </div>
 
@@ -628,7 +889,8 @@ export default function App() {
               {!isInstalling && !isCreatingRestore && (
                 <button
                   onClick={() => checkAppUpdate(false)}
-                  className="group flex items-center gap-4 rounded-2xl bg-md-surface-container-high px-5 py-3 text-md-on-surface transition-all hover:bg-md-surface-container-highest hover:shadow-md active:scale-95"
+                  disabled={!isOnline || checkingAppVersion}
+                  className="group flex items-center gap-4 rounded-2xl bg-md-surface-container-high px-5 py-3 text-md-on-surface transition-all hover:bg-md-surface-container-highest hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   title={t('appUpdateCheck')}
                 >
                   <div className={clsx("p-2 rounded-xl bg-md-primary-container text-md-on-primary-container", checkingAppVersion && "animate-spin")}>
@@ -684,141 +946,143 @@ export default function App() {
                   className="flex items-center gap-4 rounded-2xl bg-md-primary px-8 py-4 font-black uppercase tracking-widest text-md-on-primary shadow-xl shadow-md-primary/20 transition-all hover:scale-[1.02] hover:shadow-2xl disabled:grayscale disabled:opacity-50 active:scale-95"
                 >
                   <ArrowDownToLine className={clsx("h-6 w-6", runningPreflight && "animate-pulse")} />
-                  <span>{runningPreflight ? t('preflightRunning') : `${t('updateSelected')} (${selectedIds.size})`}</span>
+                  <span className="font-black tracking-widest uppercase">{runningPreflight ? t('preflightRunning') : `${t('updateSelected')} (${selectedIds.size})`}</span>
                 </button>
               )}
             </div>
           </div>
 
-          {isWingetMissing ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-20 text-center">
-              <div className="relative">
-                <div className="absolute -inset-10 rounded-full bg-md-error/10 blur-3xl" />
-                <div className="p-8 rounded-[32px] bg-md-error-container text-md-on-error-container shadow-2xl relative">
-                  <XCircle className="h-20 w-20" strokeWidth={1.5} />
-                </div>
-              </div>
-              <div className="max-w-md space-y-4">
-                <h3 className="text-3xl font-black uppercase tracking-tight text-md-on-surface">{t('wingetMissing')}</h3>
-                <p className="text-md-on-surface-variant font-bold leading-relaxed">
-                  {t('wingetMissingDesc')}
-                </p>
-                <button
-                  onClick={() => window.ipcRenderer.invoke('system:open-url', 'https://aka.ms/getwinget')}
-                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-md-primary px-8 py-4 text-sm font-black uppercase tracking-widest text-md-on-primary shadow-lg hover:shadow-xl transition-all active:scale-95"
-                >
-                  {t('getWinget')}
-                </button>
-              </div>
-            </div>
-          ) : loading ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-12 py-32 text-center animate-in fade-in duration-700">
-              <div className="relative">
-                {/* Sentient Spinner Style */}
-                <div className="h-32 w-32 rounded-full border-8 border-md-surface-container-highest flex items-center justify-center relative shadow-inner">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-[-8px] rounded-full border-8 border-transparent border-t-md-primary"
-                  />
-                  <div className="h-16 w-16 rounded-full bg-md-primary/10 flex items-center justify-center animate-pulse">
-                    <RefreshCw className="h-8 w-8 text-md-primary" />
+          <div className="flex-1">
+            {isWingetMissing ? (
+              <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-20 text-center">
+                <div className="relative">
+                  <div className="absolute -inset-10 rounded-full bg-md-error/10 blur-3xl" />
+                  <div className="p-8 rounded-[32px] bg-md-error-container text-md-on-error-container shadow-2xl relative">
+                    <XCircle className="h-20 w-20" strokeWidth={1.5} />
                   </div>
                 </div>
-                <div className="absolute -inset-20 bg-md-primary/5 blur-[100px] -z-10" />
-              </div>
-
-              <div className="space-y-4 max-w-sm px-4">
-                <h3 className="text-4xl font-black uppercase tracking-tighter text-md-primary">
-                  {t('checking')}
-                </h3>
-                <p className="text-lg font-black leading-relaxed text-md-on-surface-variant opacity-80 uppercase tracking-widest">
-                  {t('scanningBody')}
-                </p>
-              </div>
-            </div>
-          ) : !hasChecked ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-8 lg:py-24 text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
-              <div className="relative">
-                <div className="absolute -inset-10 rounded-full bg-md-secondary-container/30 blur-[120px] animate-pulse" />
-                <div className="relative p-6 lg:p-10 rounded-[32px] lg:rounded-[40px] bg-md-surface-container-high shadow-2xl">
-                  <Coffee className="h-16 w-16 lg:h-24 lg:w-24 text-md-primary" strokeWidth={1.5} />
+                <div className="max-w-md space-y-4">
+                  <h3 className="text-3xl font-black uppercase tracking-tight text-md-on-surface">{t('wingetMissing')}</h3>
+                  <p className="text-md-on-surface-variant font-bold leading-relaxed">
+                    {t('wingetMissingDesc')}
+                  </p>
+                  <button
+                    onClick={() => window.ipcRenderer.invoke('system:open-url', 'https://aka.ms/getwinget')}
+                    className="mt-6 inline-flex items-center gap-2 rounded-full bg-md-primary px-8 py-4 text-sm font-black uppercase tracking-widest text-md-on-primary shadow-lg hover:shadow-xl transition-all active:scale-95"
+                  >
+                    {t('getWinget')}
+                  </button>
                 </div>
               </div>
+            ) : loading ? (
+              <div className="flex flex-1 flex-col items-center justify-center space-y-12 py-32 text-center animate-in fade-in duration-700">
+                <div className="relative">
+                  {/* Sentient Spinner Style */}
+                  <div className="h-32 w-32 rounded-full border-8 border-md-surface-container-highest flex items-center justify-center relative shadow-inner">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-[-8px] rounded-full border-8 border-transparent border-t-md-primary"
+                    />
+                    <div className="h-16 w-16 rounded-full bg-md-primary/10 flex items-center justify-center animate-pulse">
+                      <RefreshCw className="h-8 w-8 text-md-primary" />
+                    </div>
+                  </div>
+                  <div className="absolute -inset-20 bg-md-primary/5 blur-[100px] -z-10" />
+                </div>
 
-              <div className="max-w-lg space-y-2 lg:space-y-4 px-6">
-                <h3 className="text-2xl lg:text-4xl font-black uppercase tracking-tight text-md-on-surface">{t('readyTitle')}</h3>
-                <p className="text-sm lg:text-lg font-bold text-md-on-surface-variant leading-relaxed uppercase tracking-widest opacity-70">{t('readyDesc')}</p>
+                <div className="space-y-4 max-w-sm px-4">
+                  <h3 className="text-4xl font-black uppercase tracking-tighter text-md-primary">
+                    {t('checking')}
+                  </h3>
+                  <p className="text-lg font-black leading-relaxed text-md-on-surface-variant opacity-80 uppercase tracking-widest">
+                    {t('scanningBody')}
+                  </p>
+                </div>
+              </div >
+            ) : !hasChecked ? (
+              <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-8 lg:py-24 text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
+                <div className="relative">
+                  <div className="absolute -inset-10 rounded-full bg-md-secondary-container/30 blur-[120px] animate-pulse" />
+                  <div className="relative p-6 lg:p-10 rounded-[32px] lg:rounded-[40px] bg-md-surface-container-high shadow-2xl">
+                    <Coffee className="h-16 w-16 lg:h-24 lg:w-24 text-md-primary" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <div className="max-w-lg space-y-2 lg:space-y-4 px-6">
+                  <h3 className="text-2xl lg:text-4xl font-black uppercase tracking-tight text-md-on-surface">{t('readyTitle')}</h3>
+                  <p className="text-sm lg:text-lg font-bold text-md-on-surface-variant leading-relaxed uppercase tracking-widest opacity-70">{t('readyDesc')}</p>
+                </div>
+
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-md-primary/20 blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
+                  <button
+                    onClick={checkUpdates}
+                    className="relative group flex items-center gap-4 overflow-hidden rounded-[24px] bg-md-primary px-8 py-4 lg:px-10 lg:py-6 text-lg lg:text-xl font-black uppercase tracking-widest text-md-on-primary shadow-2xl transition-all hover:scale-[1.05] active:scale-95"
+                  >
+                    <RefreshCw className="h-6 w-6 lg:h-8 lg:w-8 transition-transform duration-700 group-hover:rotate-180" />
+                    {t('checkUpdates')}
+                  </button>
+                </div>
+
+                <p className="text-[10px] lg:text-sm font-black text-md-on-surface-variant/40 uppercase tracking-[0.3em] max-w-2xl px-8 leading-loose transition-all hover:text-md-primary/50 cursor-default">
+                  {t('footerLove')} <span className="text-md-primary">Samuel</span>.
+                  <br />
+                  {t('footerAI')}
+                  <span className="inline-block align-middle ml-2 lg:ml-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-md-error opacity-70 animate-pulse lg:w-6 lg:h-6">
+                      <path d="M4 4h4v4H4zM16 4h4v4h-4zM2 8h4v4H2zM8 8h8v4H8zM18 8h4v4h-4zM2 12h4v4H2zM6 16h4v4H6zM10 20h4v4h-4zM14 16h4v4h-4zM18 12h4v4h-4z" fill="currentColor" />
+                    </svg>
+                  </span>
+                </p>
               </div>
-
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-md-primary/20 blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
+            ) : updates.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center space-y-4 lg:space-y-6 py-12 lg:py-20 text-center">
+                <div className="relative">
+                  <div className="absolute -inset-4 rounded-full bg-emerald-500/20 blur-xl dark:bg-emerald-400/10" />
+                  <CheckCircle className="relative h-16 w-16 lg:h-24 lg:w-24 text-emerald-600 dark:text-emerald-500" strokeWidth={1} />
+                </div>
+                <h3 className="text-xl lg:text-2xl font-black uppercase tracking-tight text-md-on-surface">{t('allClean')}</h3>
+                <p className="font-black text-md-on-surface-variant opacity-70 text-base lg:text-lg uppercase tracking-widest">{t('allCleanDesc')}</p>
                 <button
                   onClick={checkUpdates}
-                  className="relative group flex items-center gap-4 overflow-hidden rounded-[24px] bg-md-primary px-8 py-4 lg:px-10 lg:py-6 text-lg lg:text-xl font-black uppercase tracking-widest text-md-on-primary shadow-2xl transition-all hover:scale-[1.05] active:scale-95"
+                  className="mt-4 lg:mt-6 px-6 py-3 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm"
                 >
-                  <RefreshCw className="h-6 w-6 lg:h-8 lg:w-8 transition-transform duration-700 group-hover:rotate-180" />
-                  {t('checkUpdates')}
+                  {t('checkAgain')}
                 </button>
-              </div>
+              </div >
+            ) : (
+              <div className="space-y-4 pb-24">
+                <div className="flex items-center justify-between rounded-xl border border-md-outline-variant bg-md-surface-container-high px-4 py-3 backdrop-blur-md">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-3 text-sm font-bold text-md-on-surface-variant hover:text-md-primary transition-colors"
+                  >
+                    {allSelectableSelected ? (
+                      <CheckSquare className="h-5 w-5 text-md-primary shadow-sm" />
+                    ) : (
+                      <Square className="h-5 w-5 text-md-outline" />
+                    )}
+                    <span>{t('selectAll')}</span>
+                  </button>
+                  <span className="text-sm font-black uppercase tracking-widest text-md-primary opacity-60">
+                    {updates.length} {t('updatesAvailable')}
+                  </span>
+                </div>
 
-              <p className="text-[10px] lg:text-sm font-black text-md-on-surface-variant/40 uppercase tracking-[0.3em] max-w-2xl px-8 leading-loose transition-all hover:text-md-primary/50 cursor-default">
-                {t('footerLove')} <span className="text-md-primary">Samuel</span>.
-                <br />
-                {t('footerAI')}
-                <span className="inline-block align-middle ml-2 lg:ml-3">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-md-error opacity-70 animate-pulse lg:w-6 lg:h-6">
-                    <path d="M4 4h4v4H4zM16 4h4v4h-4zM2 8h4v4H2zM8 8h8v4H8zM18 8h4v4h-4zM2 12h4v4H2zM6 16h4v4H6zM10 20h4v4h-4zM14 16h4v4h-4zM18 12h4v4h-4z" fill="currentColor" />
-                  </svg>
-                </span>
-              </p>
-            </div>
-          ) : updates.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-4 lg:space-y-6 py-12 lg:py-20 text-center">
-              <div className="relative">
-                <div className="absolute -inset-4 rounded-full bg-emerald-500/20 blur-xl dark:bg-emerald-400/10" />
-                <CheckCircle className="relative h-16 w-16 lg:h-24 lg:w-24 text-emerald-600 dark:text-emerald-500" strokeWidth={1} />
-              </div>
-              <h3 className="text-xl lg:text-2xl font-black uppercase tracking-tight text-md-on-surface">{t('allClean')}</h3>
-              <p className="font-black text-md-on-surface-variant opacity-70 text-base lg:text-lg uppercase tracking-widest">{t('allCleanDesc')}</p>
-              <button
-                onClick={checkUpdates}
-                className="mt-4 lg:mt-6 px-6 py-3 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm"
-              >
-                {t('checkAgain')}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4 pb-24">
-              <div className="flex items-center justify-between rounded-xl border border-md-outline-variant bg-md-surface-container-high px-4 py-3 backdrop-blur-md">
-                <button
-                  onClick={toggleSelectAll}
-                  className="flex items-center gap-3 text-sm font-bold text-md-on-surface-variant hover:text-md-primary transition-colors"
-                >
-                  {allSelectableSelected ? (
-                    <CheckSquare className="h-5 w-5 text-md-primary shadow-sm" />
-                  ) : (
-                    <Square className="h-5 w-5 text-md-outline" />
-                  )}
-                  <span>{t('selectAll')}</span>
-                </button>
-                <span className="text-sm font-black uppercase tracking-widest text-md-primary opacity-60">
-                  {updates.length} {t('updatesAvailable')}
-                </span>
-              </div>
 
-              <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-                {updates.map(update => (
-                  <UpdateCard
-                    key={update.id}
-                    update={update}
-                    isSelected={selectedIds.has(update.id)}
-                    onToggle={() => toggleSelect(update.id)}
-                  />
-                ))}
+                <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+                  {updates.map(update => (
+                    <UpdateCard
+                      key={update.id}
+                      update={update}
+                      isSelected={selectedIds.has(update.id)}
+                      onToggle={() => toggleSelect(update.id)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : (
         <HistoryView
@@ -832,156 +1096,223 @@ export default function App() {
             setIsWingetMissing(false);
           }}
         />
-      )}
+      )
+      }
 
       {/* Summary Report Modal */}
-      {showSummary && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all p-4">
-          <div className="w-full max-w-xl rounded-3xl bg-md-surface-container-high p-8 shadow-2xl border border-md-outline-variant max-h-[80vh] flex flex-col relative overflow-hidden">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-2xl font-black uppercase tracking-tight text-md-on-surface">{t('summaryTitle')}</h3>
-                <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest">{t('summaryDesc')}</p>
+      {
+        showSummary && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all p-4">
+            <div className="w-full max-w-xl rounded-3xl bg-md-surface-container-high p-8 shadow-2xl border border-md-outline-variant max-h-[80vh] flex flex-col relative overflow-hidden">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-md-on-surface">{t('summaryTitle')}</h3>
+                  <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest">{t('summaryDesc')}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowSummary(false);
+                    checkUpdates();
+                  }}
+                  className="rounded-full p-2 hover:bg-md-on-surface/10 transition-colors"
+                >
+                  <XCircle className="h-6 w-6 text-md-on-surface-variant" />
+                </button>
               </div>
+
+              <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                {/* Logic for summary message */}
+                {(() => {
+                  let message = t('summarySuccess');
+
+                  if (summaryFailedCount === summaryTotal) {
+                    message = t('summaryFailed'); // Or use specific "inapplicable" one if needed
+                  } else if (summaryFailedCount > 0) {
+                    message = t('summaryPartial');
+                  }
+
+                  return (
+                    <div className="mb-4 rounded-2xl border border-md-primary/20 bg-md-primary-container/30 p-6">
+                      <p className="text-xl text-md-on-primary-container italic text-center font-black uppercase tracking-tight leading-relaxed">
+                        {message}
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {restoreVerificationSummary && (
+                  <div className={clsx(
+                    "rounded-2xl border p-4",
+                    restoreVerificationSummary.status === 'confirmed'
+                      ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-900/20"
+                      : restoreVerificationSummary.status === 'missing'
+                        ? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20"
+                        : "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20"
+                  )}>
+                    <p className={clsx(
+                      "text-sm font-bold",
+                      restoreVerificationSummary.status === 'confirmed'
+                        ? "text-emerald-800 dark:text-emerald-300"
+                        : restoreVerificationSummary.status === 'missing'
+                          ? "text-red-800 dark:text-red-300"
+                          : "text-amber-800 dark:text-amber-300"
+                    )}>
+                      {restoreVerificationSummary.message}
+                    </p>
+                    {restoreVerificationSummary.details && (
+                      <p className="mt-2 whitespace-pre-wrap text-xs font-mono text-slate-900 dark:text-sky-100">
+                        {restoreVerificationSummary.details}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {batchResults.map((res, i) => (
+                  <div key={i} className="flex items-center gap-4 rounded-2xl border border-md-outline-variant bg-md-surface-container-low p-4">
+                    <div className={clsx(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm",
+                      res.status === 'success' ? "bg-green-500 text-white" :
+                        res.status === 'reboot' ? "bg-blue-600 text-white" :
+                          res.status === 'in-use' ? "bg-amber-500 text-white" :
+                            res.status === 'inapplicable' ? "bg-amber-500 text-white" :
+                              res.status === 'security-error' ? "bg-orange-600 text-white" :
+                                "bg-red-500 text-white"
+                    )}>
+                      {res.status === 'success' && <CheckCircle className="h-5 w-5" />}
+                      {res.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
+                      {res.status === 'in-use' && <AlertTriangle className="h-5 w-5" />}
+                      {res.status === 'inapplicable' && <AlertCircle className="h-5 w-5" />}
+                      {res.status === 'security-error' && <AlertTriangle className="h-5 w-5" />}
+                      {res.status === 'failed' && <XCircle className="h-5 w-5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-md-on-surface truncate">{res.appName}</h4>
+                      <p className="text-[10px] text-md-primary font-black uppercase tracking-widest mb-1 opacity-70">
+                        {t('versionLabel')} {res.version}
+                      </p>
+                      <p className="text-xs text-md-on-surface-variant italic font-bold">
+                        {res.status === 'success' ? t('statusSuccess') :
+                          res.status === 'reboot' ? t('statusReboot') :
+                            res.status === 'in-use' ? t('statusInUse') :
+                              res.status === 'inapplicable' ? t('statusInapplicable') :
+                                res.status === 'security-error' ? t('statusSecurity') :
+                                  t('statusFailed')}
+                      </p>
+                    </div>
+                  </div>
+                ))
+                }
+
+                {
+                  batchResults.some(r => r.status === 'success' || r.status === 'reboot') && (
+                    <div className="rounded-2xl bg-blue-500/10 p-4 border border-blue-500/20">
+                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        {t('restartRecommendation')}
+                      </p>
+                    </div>
+                  )
+                }
+              </div >
+
+              <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                {hasRetryableSummaryItems && (
+                  <button
+                    onClick={() => { void retryFailedFromSummary(); }}
+                    className="rounded-2xl border border-amber-300 bg-amber-50 py-3 text-sm font-bold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                  >
+                    {t('summaryRetryFailed')}
+                  </button>
+                )}
+                <button
+                  onClick={exportDiagnostics}
+                  disabled={exportingDiagnostics}
+                  className={clsx(
+                    "rounded-2xl border py-3 text-sm font-bold transition-colors",
+                    exportingDiagnostics
+                      ? "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-500"
+                      : "border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-sky-100 dark:hover:bg-white/10"
+                  )}
+                >
+                  {exportingDiagnostics ? `${t('exportDiagnostics')}...` : t('summaryExportDiagnostics')}
+                </button>
+              </div>
+
               <button
                 onClick={() => {
                   setShowSummary(false);
                   checkUpdates();
                 }}
-                className="rounded-full p-2 hover:bg-md-on-surface/10 transition-colors"
+                className="mt-8 w-full rounded-2xl bg-md-primary py-4 font-black uppercase tracking-widest text-md-on-primary shadow-xl shadow-md-primary/20 transition-all hover:bg-md-primary/90 hover:scale-[1.02] active:scale-95"
               >
-                <XCircle className="h-6 w-6 text-md-on-surface-variant" />
+                {summaryFailedCount === summaryTotal ? t('thanksNothing') : t('closeSuccess')}
               </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-              {/* Logic for summary message */}
-              {(() => {
-                const total = batchResults.length;
-                const failed = batchResults.filter(
-                  r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
-                ).length;
-
-                let message = t('summarySuccess');
-
-                if (failed === total) {
-                  message = t('summaryFailed'); // Or use specific "inapplicable" one if needed
-                } else if (failed > 0) {
-                  message = t('summaryPartial');
-                }
-
-                return (
-                  <div className="mb-4 rounded-2xl border border-md-primary/20 bg-md-primary-container/30 p-6">
-                    <p className="text-xl text-md-on-primary-container italic text-center font-black uppercase tracking-tight leading-relaxed">
-                      {message}
-                    </p>
-                  </div>
-                );
-              })()}
-
-              {batchResults.map((res, i) => (
-                <div key={i} className="flex items-center gap-4 rounded-2xl border border-md-outline-variant bg-md-surface-container-low p-4">
-                  <div className={clsx(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm",
-                    res.status === 'success' ? "bg-green-500 text-white" :
-                      res.status === 'reboot' ? "bg-blue-600 text-white" :
-                        res.status === 'in-use' ? "bg-amber-500 text-white" :
-                          res.status === 'inapplicable' ? "bg-amber-500 text-white" :
-                            res.status === 'security-error' ? "bg-orange-600 text-white" :
-                              "bg-red-500 text-white"
-                  )}>
-                    {res.status === 'success' && <CheckCircle className="h-5 w-5" />}
-                    {res.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
-                    {res.status === 'in-use' && <AlertTriangle className="h-5 w-5" />}
-                    {res.status === 'inapplicable' && <AlertCircle className="h-5 w-5" />}
-                    {res.status === 'security-error' && <AlertTriangle className="h-5 w-5" />}
-                    {res.status === 'failed' && <XCircle className="h-5 w-5" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-md-on-surface truncate">{res.appName}</h4>
-                    <p className="text-[10px] text-md-primary font-black uppercase tracking-widest mb-1 opacity-70">
-                      {t('versionLabel')} {res.version}
-                    </p>
-                    <p className="text-xs text-md-on-surface-variant italic font-bold">
-                      {res.status === 'success' ? t('statusSuccess') :
-                        res.status === 'reboot' ? t('statusReboot') :
-                          res.status === 'in-use' ? t('statusInUse') :
-                            res.status === 'inapplicable' ? t('statusInapplicable') :
-                              res.status === 'security-error' ? t('statusSecurity') :
-                                t('statusFailed')}
-                    </p>
-                  </div>
-                </div>
-              ))}
-
-              {batchResults.some(r => r.status === 'success' || r.status === 'reboot') && (
-                <div className="rounded-2xl bg-blue-500/10 p-4 border border-blue-500/20">
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                    <RefreshCw className="h-4 w-4" />
-                    {t('restartRecommendation')}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => {
-                setShowSummary(false);
-                checkUpdates();
-              }}
-              className="mt-8 w-full rounded-2xl bg-md-primary py-4 font-black uppercase tracking-widest text-md-on-primary shadow-xl shadow-md-primary/20 transition-all hover:bg-md-primary/90 hover:scale-[1.02] active:scale-95"
-            >
-              {(() => {
-                const total = batchResults.length;
-                const failed = batchResults.filter(
-                  r => r.status === 'failed' || r.status === 'inapplicable' || r.status === 'in-use' || r.status === 'security-error'
-                ).length;
-                return failed === total ? t('thanksNothing') : t('closeSuccess');
-              })()}
-            </button>
-          </div>
-        </div>
-      )}
+            </div >
+          </div >
+        )
+      }
 
       {/* Conflict Modal */}
-      {conflictState && (
-        <ConflictModal
-          appName={conflictState.appName}
-          onRetry={conflictState.onRetry}
-          onSkip={conflictState.onSkip}
-        />
-      )}
+      {
+        conflictState && (
+          <ConflictModal
+            appName={conflictState.appName}
+            onRetry={conflictState.onRetry}
+            onSkip={conflictState.onSkip}
+          />
+        )
+      }
 
-      {restoreDecisionState && (
-        <RestoreFailureModal
-          isOpen={Boolean(restoreDecisionState)}
-          message={restoreDecisionState.message}
-          details={restoreDecisionState.details}
-          onContinue={() => {
-            restoreDecisionState.onContinue();
-            setRestoreDecisionState(null);
-          }}
-          onCancel={() => {
-            restoreDecisionState.onCancel();
-            setRestoreDecisionState(null);
-          }}
-        />
-      )}
+      {
+        restoreDecisionState && (
+          <RestoreFailureModal
+            isOpen={Boolean(restoreDecisionState)}
+            message={restoreDecisionState.message}
+            details={restoreDecisionState.details}
+            onContinue={() => {
+              restoreDecisionState.onContinue();
+              setRestoreDecisionState(null);
+            }}
+            onCancel={() => {
+              restoreDecisionState.onCancel();
+              setRestoreDecisionState(null);
+            }}
+          />
+        )
+      }
 
-      {preflightResult && (
-        <PreflightModal
-          isOpen={Boolean(preflightResult)}
-          result={preflightResult}
-          onContinue={() => {
-            const canContinue = preflightResult.overall !== 'error';
-            setPreflightResult(null);
-            if (canContinue) {
-              setShowRestoreModal(true);
-            }
-          }}
-          onCancel={() => setPreflightResult(null)}
-        />
-      )}
+      {
+        restoreVerificationAlert && (
+          <RestoreVerificationAlertModal
+            isOpen={Boolean(restoreVerificationAlert)}
+            message={restoreVerificationAlert.message}
+            details={restoreVerificationAlert.details}
+            onClose={() => setRestoreVerificationAlert(null)}
+          />
+        )
+      }
+
+      {
+        preflightResult && (
+          <PreflightModal
+            isOpen={Boolean(preflightResult)}
+            result={preflightResult}
+            onContinue={() => {
+              const canContinue = preflightResult.overall !== 'error';
+              setPreflightResult(null);
+              if (canContinue) {
+                setShowRestoreModal(true);
+              } else {
+                pendingSelectedIdsRef.current = null;
+              }
+            }}
+            onCancel={() => {
+              pendingSelectedIdsRef.current = null;
+              setPreflightResult(null);
+            }}
+          />
+        )
+      }
 
       {/* Onboarding Modal */}
       {showOnboarding && <OnboardingModal onClose={handleOnboardingClose} />}
@@ -1002,58 +1333,88 @@ export default function App() {
 
       <RestoreModal
         isOpen={showRestoreModal}
-        onClose={() => setShowRestoreModal(false)}
+        onClose={() => {
+          pendingSelectedIdsRef.current = null;
+          setShowRestoreModal(false);
+        }}
         onConfirm={() => processUpdates(true)}
         onSkip={() => processUpdates(false)}
       />
 
-      {isCreatingRestore && (
-        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all">
-          <div className="flex flex-col items-center space-y-6 rounded-3xl bg-md-surface-container-high p-12 shadow-2xl border border-md-outline-variant">
-            <div className="relative">
-              <div className="absolute -inset-4 rounded-full bg-md-primary/20 blur-xl animate-pulse" />
-              <RefreshCw className="relative h-16 w-16 animate-spin text-md-primary" />
-            </div>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-black uppercase tracking-tight text-md-on-surface">{t('creatingRestore')}</h3>
-              <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest max-w-xs">
-                {t('restoreWait')}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isInstalling && !isCreatingRestore && (
-        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all">
-          <div className="flex flex-col items-center space-y-6 rounded-3xl bg-md-surface-container-high p-12 shadow-2xl border border-md-outline-variant">
-            <div className="relative">
-              <div className="absolute -inset-4 rounded-full bg-md-primary/20 blur-xl animate-pulse" />
-              <ArrowDownToLine className="relative h-16 w-16 animate-bounce text-md-primary" />
-            </div>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-black uppercase tracking-tight text-md-on-surface">{t('installingUpdates')}</h3>
-              <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest max-w-xs">
-                {t('updatingApp')} <span className="text-md-primary">{currentInstallingApp}</span>
-              </p>
-              {currentLogLine && (
-                <p className="text-[10px] text-md-primary opacity-50 italic animate-pulse truncate max-w-[250px]">
-                  {currentLogLine}
+      {
+        isCreatingRestore && (
+          <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all">
+            <div className="flex flex-col items-center space-y-6 rounded-3xl bg-md-surface-container-high p-12 shadow-2xl border border-md-outline-variant">
+              <div className="relative">
+                <div className="absolute -inset-4 rounded-full bg-md-primary/20 blur-xl animate-pulse" />
+                <RefreshCw className="relative h-16 w-16 animate-spin text-md-primary" />
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-black uppercase tracking-tight text-md-on-surface">{t('creatingRestore')}</h3>
+                <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest max-w-xs">
+                  {t('restoreWait')}
                 </p>
-              )}
-            </div>
-            <div className="h-1.5 w-64 overflow-hidden rounded-full bg-md-surface-container-low">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}
-                className="h-full bg-md-primary shadow-sm shadow-md-primary/20"
-              />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
+
+      {
+        isInstalling && !isCreatingRestore && (
+          <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all">
+            <div className="flex flex-col items-center space-y-6 rounded-3xl bg-md-surface-container-high p-12 shadow-2xl border border-md-outline-variant">
+              <div className="relative">
+                <div className="absolute -inset-4 rounded-full bg-md-primary/20 blur-xl animate-pulse" />
+                <ArrowDownToLine className="relative h-16 w-16 animate-bounce text-md-primary" />
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-black uppercase tracking-tight text-md-on-surface">{t('installingUpdates')}</h3>
+                <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest max-w-xs">
+                  {t('updatingApp')} <span className="text-md-primary">{currentInstallingApp}</span>
+                </p>
+                {currentLogLine && (
+                  <p className="text-[10px] text-md-primary opacity-50 italic animate-pulse truncate max-w-[250px]">
+                    {currentLogLine}
+                  </p>
+                )}
+              </div>
+              <div className="w-full max-w-xs space-y-3">
+                <div>
+                  <p className="mb-1 text-[11px] font-black uppercase tracking-widest text-md-on-surface-variant opacity-60">
+                    {t('appProgress')}: {currentAppProgress !== null ? `${currentAppProgress}%` : t('unknown')}
+                    {currentAppProgress !== null && currentAppProgressMode === 'estimated' ? ` (${t('estimatedLabel')})` : ''}
+                  </p>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-md-surface-container-low">
+                    {currentAppProgress !== null ? (
+                      <div
+                        className="h-full bg-md-primary transition-all duration-300"
+                        style={{ width: `${currentAppProgress}%` }}
+                      />
+                    ) : (
+                      <div className="h-full w-1/3 animate-pulse rounded-full bg-md-primary/30" />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[11px] font-black uppercase tracking-widest text-md-on-surface-variant opacity-60">
+                    {t('batchProgress')}: {installProgress?.current || 0}/{installProgress?.total || 0}
+                  </p>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-md-surface-container-low">
+                    <div
+                      className="h-full bg-md-secondary transition-all duration-500"
+                      style={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
       <ToastContainer toasts={toasts} onClose={removeToast} />
-    </Layout>
+    </Layout >
   );
 }
