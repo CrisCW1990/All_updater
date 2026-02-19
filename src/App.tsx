@@ -1025,7 +1025,7 @@ export default function App() {
                 </div>
 
                 <p className="text-[10px] lg:text-sm font-black text-md-on-surface-variant/40 uppercase tracking-[0.3em] max-w-2xl px-8 leading-loose transition-all hover:text-md-primary/50 cursor-default">
-                  {t('footerLove')} <span className="text-md-primary">Samuel</span>.
+                  {t('footerLove')} <span className="text-md-primary">Chris</span>.
                   <br />
                   {t('footerAI')}
                   <span className="inline-block align-middle ml-2 lg:ml-3">
