@@ -1,53 +1,41 @@
-# v1.0.5
+# v1.0.5 - The "Digital Overlord" Update (Polished & Synchronized)
 
 ## ES
-Esta version mejora deteccion de conflictos reales, visibilidad de progreso y experiencia responsive sin cambiar el enfoque no invasivo.
+Esta versión marca la sincronización final de la interfaz Material 3 con las mejoras funcionales de la v1.0.5. Se ha refinado la experiencia visual, la marca y la estabilidad del instalador portable.
 
-### Cambios y correcciones
-- Winget mas preciso con apps en uso (especialmente OBS):
-  - Se corrigieron falsos positivos de "aplicacion en uso" cuando no existe proceso real de OBS.
-  - Ahora se valida proceso relacionado antes de mostrar conflicto en ese caso.
-  - Se evita tratar `exit code 6` como "app en uso" de forma generica.
-- Progreso de instalacion por app mejorado:
-  - Se consume salida combinada de winget (`stdout` + `stderr`) para capturar progreso real cuando existe.
-  - Se agrego progreso estimado por fases/tiempo cuando winget no emite porcentaje.
-  - UI aclara cuando el progreso es estimado (`Estimado`) y mantiene progreso de lote por separado.
-- UX del header superior mas clara:
-  - Se evita duplicidad visual del control de update de la app cuando ya hay banner de nueva version.
-  - El boton de diagnostico ahora indica explicitamente que exporta ZIP de diagnostico.
-- Responsividad refinada (mobile-first):
-  - Header de acciones ajustado para pantallas pequenas.
-  - `UpdateCard` mejor manejo de IDs largos y contenidos densos.
-  - Modales (`Onboarding`, `Restore`, `Preflight`) ajustados para 320/360 sin quiebres de layout.
-- Texto onboarding EN corregido:
-  - "I help you to update..."
+### Novedades Visuales y de Marca (New Design)
+- **Interfaz Material 3 Unificada**: Se han resuelto todos los conflictos de estilo, aplicando un diseño M3 consistente en el Dashboard, Modales y Tarjetas.
+- **Nuevo Icono**: Se ha reemplazado el logo antiguo por un nuevo icono moderno (`icon.ico`) integrado en la barra de tareas y ventana.
+- **Rebranding**: Actualizados los créditos del desarrollador a "Chris".
+- **Iconos en Tarjetas**: Añadidos iconos de marcador de posición en las tarjetas de actualización para mejorar la jerarquía visual sin sacrificar rendimiento.
+- **Menu Lateral**: Logo actualizado en el sidebar para coincidir con el icono de la aplicación.
 
-### Calidad
-- Lint limpio.
-- TypeScript limpio (`app` y `electron`).
+### Mejoras Funcionales y Sincronización (v1.0.5 Core)
+- **Detección de Conflictos**: Winget ahora es más preciso detectando aplicaciones en uso (especialmente OBS), evitando falsos positivos.
+- **Progreso de Instalación**: Mejor visualización del progreso combinado (stdout/stderr) y estimaciones cuando Winget no reporta porcentajes.
+- **Resolución de Conflictos**: Se han fusionado exitosamente las ramas de desarrollo, integrando la lógica de "Acciones Rápidas" en `PreflightModal` con el nuevo estilo visual.
+- **Limpieza**: Eliminados assets antiguos y scripts temporales para un ejecutable más limpio.
+
+### Build
+- **Portable Optimizado**: El ejecutable ahora se construye por defecto como `portable unsigned` para facilitar la distribución local sin requisitos de firma estricta.
+
+---
 
 ## EN
-This release improves real conflict detection, install progress visibility, and responsive behavior while keeping the app non-invasive.
+This release marks the final synchronization of the Material 3 interface with the functional improvements of v1.0.5. The visual experience, branding, and portable installer stability have been refined.
 
-### Changes and fixes
-- More accurate in-use detection (especially OBS):
-  - Fixed false positives where OBS was reported as running without an actual OBS process.
-  - OBS conflict modal now requires related process confirmation.
-  - Removed generic `exit code 6` mapping to "app in use".
-- Better per-app install progress:
-  - Winget combined stream (`stdout` + `stderr`) is now consumed to capture real progress when available.
-  - Added estimated progress fallback (phase/time-based) when winget does not emit percentages.
-  - UI explicitly marks estimated progress (`Estimated`) and keeps batch progress separate.
-- Clearer top header UX:
-  - Avoids visual duplication of app-update controls when update banner is already visible.
-  - Diagnostics button now explicitly states it exports a diagnostics ZIP.
-- Responsive refinements (mobile-first):
-  - Top action header adjusted for small screens.
-  - `UpdateCard` now handles long IDs and dense content more safely.
-  - `Onboarding`, `Restore`, and `Preflight` modals tuned for 320/360 widths.
-- Onboarding EN copy correction:
-  - "I help you to update..."
+### Visual & Branding Updates (New Design)
+- **Unified Material 3 Interface**: All style conflicts resolved, applying consistent M3 design across Dashboard, Modals, and Cards.
+- **New Icon**: Replaced old logo with a new modern icon (`icon.ico`) integrated into taskbar and window.
+- **Rebranding**: Updated developer credits to "Chris".
+- **Card Icons**: Added placeholder icons to update cards to improve visual hierarchy without sacrificing performance.
+- **Sidebar**: Updated logo in sidebar to match application icon.
 
-### Quality
-- Clean lint.
-- Clean TypeScript checks (`app` and `electron`).
+### Functional Improvements & Synchronization (v1.0.5 Core)
+- **Conflict Detection**: Winget is now more accurate detecting in-use apps (especially OBS), avoiding false positives.
+- **Install Progress**: Better visualization of combined progress (stdout/stderr) and estimations when Winget doesn't report percentages.
+- **Conflict Resolution**: Successfully merged development branches, integrating "Quick Actions" logic in `PreflightModal` with the new visual style.
+- **Cleanup**: Removed old assets and temporary scripts for a cleaner executable.
+
+### Build
+- **Optimized Portable**: The executable is now built by default as `portable unsigned` to facilitate local distribution without strict signing requirements.

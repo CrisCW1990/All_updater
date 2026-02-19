@@ -1,5 +1,5 @@
 import { execa } from 'execa';
-import type { AppUpdate, PackageInfo } from '../../shared/types';
+import type { AppUpdate } from '../../shared/types';
 import type { HistoryService } from './history';
 import { SystemService } from './system';
 

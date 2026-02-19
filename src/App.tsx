@@ -122,7 +122,6 @@ export default function App() {
   const historyWriteWarningShownRef = useRef(false);
   const pendingSelectedIdsRef = useRef<Set<string> | null>(null);
   const estimatedProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastLogTimestampRef = useRef<number>(0);
   const progressHistoryRef = useRef<{ percent: number; time: number }[]>([]);
   const [currentEta, setCurrentEta] = useState<string | null>(null);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
