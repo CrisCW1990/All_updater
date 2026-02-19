@@ -39,7 +39,6 @@ export class SettingsService {
             schema,
             clearInvalidConfig: true
         });
-        console.log('Settings file path:', this.store.path);
     }
 
     get<K extends keyof UserSettings>(key: K): UserSettings[K] {

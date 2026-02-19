@@ -5,6 +5,7 @@ import type {
     AppUpdateDownloadResult,
     AppVersionCheckResult,
     HistoryItem,
+    PackageInfo,
     PreflightResult,
     RestorePointResult,
     RestorePointVerificationResult
@@ -31,6 +32,7 @@ interface RendererEventMap {
 export interface IElectronAPI {
     invoke(channel: 'winget:check-updates'): Promise<AppUpdate[]>;
     invoke(channel: 'winget:install-update', id: string): Promise<void>;
+    invoke(channel: 'winget:get-package-info', id: string, version: string): Promise<PackageInfo>;
     invoke(channel: 'system:create-restore-point', description: string): Promise<RestorePointResult>;
     invoke(channel: 'system:verify-restore-point', sequenceNumber: number, description: string): Promise<RestorePointVerificationResult>;
     invoke(channel: 'system:open-logs'): Promise<void>;

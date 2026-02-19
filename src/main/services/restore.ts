@@ -152,11 +152,9 @@ export class SystemRestoreService {
             ], { reject: false });
 
             if (result.stdout) {
-                console.log('[Restore] stdout:', result.stdout);
                 this.writeRestoreLog(`Checkpoint stdout: ${result.stdout.replace(/\r?\n/g, ' | ')}`);
             }
             if (result.stderr) {
-                console.error('[Restore] stderr:', result.stderr);
                 this.writeRestoreLog(`Checkpoint stderr: ${result.stderr.replace(/\r?\n/g, ' | ')}`);
             }
 

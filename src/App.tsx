@@ -56,13 +56,17 @@ const normalizeWingetLog = (value: string): string => (
 
 const parseEstimatedPercentFromWingetLog = (logLine: string): number | null => {
   const normalized = normalizeWingetLog(logLine);
+  // Phases ordered by typical install timeline.
+  // Download gets a wide range (20-62%) since it's the longest phase.
   const phaseRules: Array<{ percent: number, regex: RegExp }> = [
-    { percent: 12, regex: /\bstarting|iniciando|initializing|inicializando\b/ },
-    { percent: 28, regex: /\bdownloading|download|descargando|descarga|transferring|transfer\b/ },
-    { percent: 45, regex: /\bextract|unpack|decompress|descomprim|expandiendo\b/ },
-    { percent: 70, regex: /\binstalling|install|instaland|aplicando|applying|executing|ejecutando\b/ },
-    { percent: 84, regex: /\bverifying|verify|verificando|verificar|hash|checksum\b/ },
-    { percent: 95, regex: /\bfinalizing|finalizando|completing|completion|completado|completed|done|hecho|terminado|installed successfully|instalado correctamente\b/ }
+    { percent: 5, regex: /\bstarting|iniciando|initializing|inicializando|preparing|preparando|resolving|resolviendo\b/ },
+    { percent: 12, regex: /\bfound|encontrado|located|locating|searching|buscando|checking source|comprobando fuente\b/ },
+    { percent: 20, regex: /\bdownloading|download|descargando|descarga|transferring|transfer|fetching|fetch|retrieving|obteniendo\b/ },
+    { percent: 62, regex: /\bextract|unpack|decompress|descomprim|expandiendo|unpacking|desempaquetando\b/ },
+    { percent: 72, regex: /\binstalling|install|instaland|aplicando|applying|executing|ejecutando|running installer|ejecutando instalador\b/ },
+    { percent: 85, regex: /\bverifying|verify|verificando|verificar|hash|checksum|validating|validando|integrity\b/ },
+    { percent: 92, regex: /\bregistering|registrando|configuring|configurando|setting up|configuracion\b/ },
+    { percent: 97, regex: /\bfinalizing|finalizando|completing|completion|completado|completed|done|hecho|terminado|installed successfully|instalado correctamente|successfully installed\b/ }
   ];
 
   for (const rule of phaseRules) {
@@ -92,6 +96,7 @@ export default function App() {
   const [currentLogLine, setCurrentLogLine] = useState<string | null>(null);
   const [currentAppProgress, setCurrentAppProgress] = useState<number | null>(null);
   const [currentAppProgressMode, setCurrentAppProgressMode] = useState<AppProgressMode | null>(null);
+  const [slowConnectionMsg, setSlowConnectionMsg] = useState<string | null>(null);
   const [installProgress, setInstallProgress] = useState<{ current: number, total: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
   const [showSummary, setShowSummary] = useState(false);
@@ -117,6 +122,9 @@ export default function App() {
   const historyWriteWarningShownRef = useRef(false);
   const pendingSelectedIdsRef = useRef<Set<string> | null>(null);
   const estimatedProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastLogTimestampRef = useRef<number>(0);
+  const progressHistoryRef = useRef<{ percent: number; time: number }[]>([]);
+  const [currentEta, setCurrentEta] = useState<string | null>(null);
   const selectableUpdates = updates.filter(u => u.previousStatus !== 'inapplicable');
   const allSelectableSelected = selectableUpdates.length > 0 && selectedIds.size === selectableUpdates.length;
   const getErrorMessage = (error: unknown): string => {
@@ -163,6 +171,52 @@ export default function App() {
     }, 1200);
   }, [stopEstimatedAppProgress]);
 
+  // Slow connection detection: if progress hasn't moved in 15s, show a satirical message
+  const slowConnectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastProgressValueRef = useRef<number | null>(null);
+  const slowMsgIndexRef = useRef(0);
+  const slowMsgKeys = ['slowConnection1', 'slowConnection2', 'slowConnection3', 'slowConnection4'] as const;
+
+  useEffect(() => {
+    if (!isInstalling || currentAppProgress === null) {
+      if (slowConnectionTimerRef.current) clearTimeout(slowConnectionTimerRef.current);
+      setSlowConnectionMsg(null);
+      return;
+    }
+    // Progress moved — reset stall timer
+    if (currentAppProgress !== lastProgressValueRef.current) {
+      lastProgressValueRef.current = currentAppProgress;
+      setSlowConnectionMsg(null);
+      if (slowConnectionTimerRef.current) clearTimeout(slowConnectionTimerRef.current);
+      slowConnectionTimerRef.current = setTimeout(() => {
+        const key = slowMsgKeys[slowMsgIndexRef.current % slowMsgKeys.length];
+        slowMsgIndexRef.current++;
+        setSlowConnectionMsg(t(key));
+      }, 15000);
+    }
+    return () => {
+      if (slowConnectionTimerRef.current) clearTimeout(slowConnectionTimerRef.current);
+    };
+  }, [isInstalling, currentAppProgress, t]);
+
+  // ETA calculation: sliding window over last 5 real data points
+  const computeEta = (history: { percent: number; time: number }[], currentPercent: number): string | null => {
+    if (history.length < 2) return null;
+    const window = history.slice(-5);
+    const oldest = window[0];
+    const newest = window[window.length - 1];
+    const deltaPercent = newest.percent - oldest.percent;
+    const deltaTime = newest.time - oldest.time; // ms
+    if (deltaPercent <= 0 || deltaTime <= 0) return null;
+    const ratePerMs = deltaPercent / deltaTime;
+    const remaining = 100 - currentPercent;
+    const etaMs = remaining / ratePerMs;
+    const etaSec = Math.round(etaMs / 1000);
+    if (etaSec <= 0) return null;
+    if (etaSec < 60) return t('etaSeconds').replace('{n}', String(etaSec));
+    return t('etaMinutes').replace('{n}', String(Math.round(etaSec / 60)));
+  };
+
   useEffect(() => {
     const handleLog = (_event: unknown, log: string) => {
       const cleanLog = log.replace(/\[#+ -+\]/g, '').trim();
@@ -172,7 +226,15 @@ export default function App() {
       if (realPercent !== null) {
         stopEstimatedAppProgress();
         setCurrentAppProgressMode('real');
-        setCurrentAppProgress((prev) => Math.max(prev ?? 0, realPercent));
+        setCurrentAppProgress((prev) => {
+          const next = Math.max(prev ?? 0, realPercent);
+          // Record data point for ETA
+          const now = Date.now();
+          progressHistoryRef.current = [...progressHistoryRef.current, { percent: next, time: now }].slice(-10);
+          const eta = computeEta(progressHistoryRef.current, next);
+          setCurrentEta(eta);
+          return next;
+        });
         return;
       }
 
@@ -624,6 +686,8 @@ export default function App() {
           setCurrentLogLine(null);
           setCurrentAppProgress(3);
           setCurrentAppProgressMode('estimated');
+          setCurrentEta(null);
+          progressHistoryRef.current = [];
           startEstimatedAppProgress();
 
           // Wait for conflict resolution if needed
@@ -1378,12 +1442,22 @@ export default function App() {
                     {currentLogLine}
                   </p>
                 )}
+                {slowConnectionMsg && (
+                  <p className="text-[10px] text-amber-400 font-black uppercase tracking-widest animate-pulse max-w-[280px] text-center">
+                    ⚠ {slowConnectionMsg}
+                  </p>
+                )}
               </div>
               <div className="w-full max-w-xs space-y-3">
                 <div>
                   <p className="mb-1 text-[11px] font-black uppercase tracking-widest text-md-on-surface-variant opacity-60">
                     {t('appProgress')}: {currentAppProgress !== null ? `${currentAppProgress}%` : t('unknown')}
                     {currentAppProgress !== null && currentAppProgressMode === 'estimated' ? ` (${t('estimatedLabel')})` : ''}
+                    {currentAppProgressMode === 'real' && currentAppProgress !== null && currentAppProgress < 100 && (
+                      <span className="ml-1 text-md-primary">
+                        — {currentEta ?? t('etaCalculating')}
+                      </span>
+                    )}
                   </p>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-md-surface-container-low">
                     {currentAppProgress !== null ? (

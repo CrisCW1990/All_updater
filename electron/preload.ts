@@ -1,12 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-console.log('[Preload] Script loaded');
-
 type RendererListener = Parameters<typeof ipcRenderer.on>[1];
 const listenerMap = new Map<string, Map<RendererListener, RendererListener>>();
 const allowedInvokeChannels = new Set([
     'winget:check-updates',
     'winget:install-update',
+    'winget:get-package-info',
     'system:create-restore-point',
     'system:verify-restore-point',
     'system:open-logs',
@@ -88,9 +87,6 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
         if (!allowedInvokeChannels.has(channel)) {
             throw new Error(`IPC channel not allowed for invoke(): ${channel}`);
         }
-        console.log('[Preload] IPC invoke called:', channel);
         return ipcRenderer.invoke(channel, ...omit)
     },
 })
-
-console.log('[Preload] contextBridge.exposeInMainWorld completed');

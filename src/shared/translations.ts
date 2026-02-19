@@ -236,6 +236,26 @@ export const translations = {
                 onboardingDontShow: "Never show your face again",
                 onboardingLangTitle: "Choose your Dialect",
                 onboardingLangNote: "Choose wisely, I won't forget (unless you reset me).",
+
+                // ETA
+                etaLabel: "ETA",
+                etaCalculating: "Crunching numbers...",
+                etaSeconds: "~{n}s left",
+                etaMinutes: "~{n}m left",
+
+                // Slow connection
+                slowConnection1: "Still downloading... Your internet is on a diet.",
+                slowConnection2: "Progress stalled. Did you pay your ISP this month?",
+                slowConnection3: "This is taking forever. I've seen glaciers move faster.",
+                slowConnection4: "Winget is downloading at the speed of regret.",
+
+                // What's New
+                whatsNew: "What's new",
+                whatsNewVersion: "Version",
+                whatsNewLoading: "Interrogating the servers...",
+                whatsNewUnavailable: "The devs were too lazy to write release notes. Shocking.",
+                whatsNewOpenUrl: "Read the sacred scrolls",
+                whatsNewHomepage: "Visit their lair",
         },
         es: {
                 // Layout & Navigation
@@ -442,7 +462,7 @@ export const translations = {
                 historyRecord: "Una cronología de mi incansable servicio hacia ti.",
                 historyFilterAll: "Todo",
                 historyFilterSuccess: "Victorias",
-                historyFilterIssues: "Tragedies",
+                historyFilterIssues: "Tragedias",
                 historyFilterFailed: "Almas Perdidas",
                 historyFilterInUse: "Apps Tercas",
                 historyFilterInapplicable: "Copitos de Nieve",
@@ -472,6 +492,26 @@ export const translations = {
                 onboardingDontShow: "Que no vuelva a ver tu cara",
                 onboardingLangTitle: "Elige tu Dialecto",
                 onboardingLangNote: "Elige bien, no lo olvidaré (a menos que me resetees).",
+
+                // ETA
+                etaLabel: "ETA",
+                etaCalculating: "Calculando...",
+                etaSeconds: "~{n}s restantes",
+                etaMinutes: "~{n}m restantes",
+
+                // Slow connection
+                slowConnection1: "Sigue descargando... Tu internet está a dieta.",
+                slowConnection2: "Progreso estancado. ¿Pagaste el internet este mes?",
+                slowConnection3: "Esto está tardando una eternidad. He visto glaciares más rápidos.",
+                slowConnection4: "Winget descarga a la velocidad del arrepentimiento.",
+
+                // What's New
+                whatsNew: "Novedades",
+                whatsNewVersion: "Versión",
+                whatsNewLoading: "Interrogando a los servidores...",
+                whatsNewUnavailable: "Los devs eran demasiado vagos para escribir notas. Sorprendente.",
+                whatsNewOpenUrl: "Leer los pergaminos sagrados",
+                whatsNewHomepage: "Visitar su guarida",
         }
 };
 

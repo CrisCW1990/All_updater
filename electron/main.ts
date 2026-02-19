@@ -38,13 +38,12 @@ if (app.isPackaged) {
 
 // --- Refuerzo de Administrador ---
 async function ensureElevated() {
+    const { execa } = await import('execa');
     try {
-        const { execa } = await import('execa');
         await execa('net', ['session'], { reject: true });
         return true;
     } catch {
         try {
-            const { execa } = await import('execa');
             const { stdout } = await execa('powershell', [
                 '-NoProfile',
                 '-NonInteractive',
@@ -104,15 +103,9 @@ function createWindow() {
         }
     });
 
-    // Test active push message to Key 
-    win.webContents.on('did-finish-load', () => {
-        win?.webContents.send('main-process-message', (new Date).toLocaleString())
-    })
-
     if (VITE_DEV_SERVER_URL) {
         win.loadURL(VITE_DEV_SERVER_URL)
     } else {
-        // win.loadFile('dist/index.html')
         win.loadFile(path.join(process.env.DIST || '', 'index.html'))
     }
 }

@@ -8,6 +8,13 @@ export interface AppUpdate {
     previousDetails?: string;
 }
 
+export interface PackageInfo {
+    iconUrl?: string;
+    releaseNotes?: string;
+    releaseNotesUrl?: string;
+    homepage?: string;
+}
+
 export interface WingetResult {
     updates: AppUpdate[];
     rawOutput: string;

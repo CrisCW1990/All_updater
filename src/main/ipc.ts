@@ -66,16 +66,11 @@ function setSettingSafely(key: keyof UserSettings, value: unknown): void {
 }
 
 export function setupIPC() {
-    console.log('[IPC] Setting up IPC handlers...');
-
     // Winget
     ipcMain.handle('winget:check-updates', async () => {
-        console.log('[IPC] winget:check-updates handler called');
         logger.info('Checking for updates...');
         return await wingetService.getAvailableUpdates();
     });
-
-    console.log('[IPC] IPC handlers registered successfully');
 
     ipcMain.handle('winget:install-update', async (event, id: string) => {
         logger.info(`Installing update for ${id}`);
@@ -133,17 +128,13 @@ export function setupIPC() {
     ipcMain.handle('system:open-logs', async () => {
         try {
             const logFile = log.transports.file.getFile();
-            // Try enabling console logging too
-            log.transports.console.level = 'debug';
-
             if (logFile) {
-                console.log('Opening log file at:', logFile.path);
                 await shell.showItemInFolder(logFile.path);
             } else {
-                console.error('Log file object is null');
+                logger.warn('system:open-logs: log file object is null');
             }
         } catch (error) {
-            console.error(`Failed to open logs: ${error}`);
+            logger.error(`system:open-logs failed: ${error}`);
         }
     });
 
@@ -199,6 +190,10 @@ export function setupIPC() {
     ipcMain.handle('system:export-diagnostics', async () => {
         logger.info('Exporting diagnostics package...');
         return await diagnosticsService.exportDiagnostics();
+    });
+
+    ipcMain.handle('winget:get-package-info', async (_, id: string, version: string) => {
+        return await wingetService.getPackageInfo(id, version);
     });
 
     // History

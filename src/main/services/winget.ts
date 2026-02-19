@@ -1,5 +1,5 @@
 import { execa } from 'execa';
-import type { AppUpdate } from '../../shared/types';
+import type { AppUpdate, PackageInfo } from '../../shared/types';
 import type { HistoryService } from './history';
 import { SystemService } from './system';
 
@@ -256,12 +256,12 @@ export class WingetService {
                         return !temporarilySuppressed;
                     })
                     .map(u => {
-                    const found = history.find((h) => h.id === u.id && h.version === u.available);
-                    if (found && (found.status === 'inapplicable' || found.status === 'skipped')) {
-                        return { ...u, previousStatus: found.status, previousDetails: found.details };
-                    }
-                    return u;
-                });
+                        const found = history.find((h) => h.id === u.id && h.version === u.available);
+                        if (found && (found.status === 'inapplicable' || found.status === 'skipped')) {
+                            return { ...u, previousStatus: found.status, previousDetails: found.details };
+                        }
+                        return u;
+                    });
             }
 
             this.debug(`[WingetService] Parsed ${updates.length} updates after filtering.`);
@@ -808,5 +808,59 @@ export class WingetService {
         }
 
         throw new Error('WingetOutputParseError: Could not parse updates table from winget output.');
+    }
+
+    async getPackageInfo(id: string, version: string): Promise<import('../../shared/types').PackageInfo> {
+        const result: import('../../shared/types').PackageInfo = {};
+
+        // Try winget.run community API for icon and homepage
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 8000);
+            const response = await fetch(`https://api.winget.run/v2/packages/${encodeURIComponent(id)}`, {
+                headers: { 'User-Agent': 'All-Updater' },
+                signal: controller.signal
+            });
+            clearTimeout(timer);
+            if (response.ok) {
+                const data = await response.json() as { Data?: { IconUrl?: string; Homepage?: string } };
+                if (data.Data?.IconUrl) result.iconUrl = data.Data.IconUrl;
+                if (data.Data?.Homepage) result.homepage = data.Data.Homepage;
+            }
+        } catch {
+            // Network unavailable or package not found — silently skip
+        }
+
+        // Try GitHub winget-pkgs manifest for release notes
+        try {
+            const parts = id.split('.');
+            if (parts.length >= 2) {
+                const firstLetter = parts[0][0].toLowerCase();
+                const publisher = parts[0];
+                const packageName = parts.slice(1).join('.');
+                const manifestUrl =
+                    `https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/` +
+                    `${firstLetter}/${publisher}/${packageName}/${version}/${publisher}.${packageName}.locale.en-US.yaml`;
+
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 8000);
+                const response = await fetch(manifestUrl, {
+                    headers: { 'User-Agent': 'All-Updater' },
+                    signal: controller.signal
+                });
+                clearTimeout(timer);
+                if (response.ok) {
+                    const yaml = await response.text();
+                    const notesMatch = yaml.match(/^ReleaseNotes:\s*[|>]?\s*\n((?:[ \t]+.+\n?)*)/m);
+                    const notesUrlMatch = yaml.match(/^ReleaseNotesUrl:\s*(.+)/m);
+                    if (notesMatch) result.releaseNotes = notesMatch[1].replace(/^[ \t]+/gm, '').trim();
+                    if (notesUrlMatch) result.releaseNotesUrl = notesUrlMatch[1].trim();
+                }
+            }
+        } catch {
+            // Manifest not found or network error — silently skip
+        }
+
+        return result;
     }
 }
