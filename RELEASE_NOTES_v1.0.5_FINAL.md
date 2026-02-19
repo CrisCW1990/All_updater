@@ -6,7 +6,7 @@ Esta versión marca la sincronización final de la interfaz Material 3 con las m
 ### Novedades Visuales y de Marca (New Design)
 - **Interfaz Material 3 Unificada**: Se han resuelto todos los conflictos de estilo, aplicando un diseño M3 consistente en el Dashboard, Modales y Tarjetas.
 - **Nuevo Icono**: Se ha reemplazado el logo antiguo por un nuevo icono moderno (`icon.ico`) integrado en la barra de tareas y ventana.
-- **Rebranding**: Actualizados los créditos del desarrollador a "Chris" en toda la aplicación.
+- **Rebranding**: Actualizados los créditos del desarrollador a "Chris".
 - **Iconos en Tarjetas**: Añadidos iconos de marcador de posición en las tarjetas de actualización para mejorar la jerarquía visual sin sacrificar rendimiento.
 - **Menu Lateral**: Logo actualizado en el sidebar para coincidir con el icono de la aplicación.
 
@@ -27,7 +27,7 @@ This release marks the final synchronization of the Material 3 interface with th
 ### Visual & Branding Updates (New Design)
 - **Unified Material 3 Interface**: All style conflicts resolved, applying consistent M3 design across Dashboard, Modals, and Cards.
 - **New Icon**: Replaced old logo with a new modern icon (`icon.ico`) integrated into taskbar and window.
-- **Rebranding**: Updated developer credits to "Chris" throughout the application.
+- **Rebranding**: Updated developer credits to "Chris".
 - **Card Icons**: Added placeholder icons to update cards to improve visual hierarchy without sacrificing performance.
 - **Sidebar**: Updated logo in sidebar to match application icon.
 
