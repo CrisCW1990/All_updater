@@ -1,82 +1,105 @@
-import { app as o, ipcMain as u, BrowserWindow as c, dialog as l } from "electron";
-import n from "path";
-import { fileURLToPath as m } from "url";
-const f = m(import.meta.url), p = n.dirname(f);
-process.env.DIST = n.join(p, "../dist");
-process.env.VITE_PUBLIC = o.isPackaged ? process.env.DIST : n.join(process.env.DIST, "../public");
-if (o.isPackaged) {
-  const t = process.env.PORTABLE_EXECUTABLE_DIR || n.dirname(o.getPath("exe")), e = n.join(t, "data");
-  o.setPath("userData", e);
+import { app, ipcMain, BrowserWindow, dialog } from "electron";
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename$1 = fileURLToPath(import.meta.url);
+const __dirname$1 = path.dirname(__filename$1);
+process.env.DIST = path.join(__dirname$1, "../dist");
+process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, "../public");
+if (app.isPackaged) {
+  const portableBaseDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"));
+  const portableDataPath = path.join(portableBaseDir, "data");
+  app.setPath("userData", portableDataPath);
 }
-async function w() {
+async function ensureElevated() {
   try {
-    const { execa: t } = await import("./index-CWXQCQWA.js").then((e) => e.i);
-    return await t("net", ["session"], { reject: !0 }), !0;
+    const { execa } = await import("./index-BsbJ0N1D.js").then((n) => n.i);
+    await execa("net", ["session"], { reject: true });
+    return true;
   } catch {
     try {
-      const { execa: t } = await import("./index-CWXQCQWA.js").then((a) => a.i), { stdout: e } = await t("powershell", [
+      const { execa } = await import("./index-BsbJ0N1D.js").then((n) => n.i);
+      const { stdout } = await execa("powershell", [
         "-NoProfile",
         "-NonInteractive",
         "-Command",
         "([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
-      ], { reject: !1 });
-      return e.trim().toLowerCase() === "true";
+      ], { reject: false });
+      return stdout.trim().toLowerCase() === "true";
     } catch {
-      return !1;
+      return false;
     }
   }
 }
-let i, r = !1;
-const s = process.env.VITE_DEV_SERVER_URL;
-function d() {
-  let t = !1;
-  i = new c({
+let win;
+let isOperationActive = false;
+const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+function createWindow() {
+  let forceClose = false;
+  win = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: n.join(p, "preload.mjs"),
-      nodeIntegration: !1,
-      contextIsolation: !0
+      preload: path.join(__dirname$1, "preload.mjs"),
+      nodeIntegration: false,
+      contextIsolation: true
     },
-    autoHideMenuBar: !0,
+    autoHideMenuBar: true,
     title: "All Updater",
-    icon: n.join(process.env.VITE_PUBLIC, "logo.png")
-  }), i.on("close", (e) => {
-    t || r && (e.preventDefault(), l.showMessageBoxSync(i, {
-      type: "warning",
-      buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
-      title: "Operation in Progress / Operacion en progreso",
-      message: `An application update or restore point is currently in progress. Closing the app now could leave your system or software in an unstable state.
-
-Hay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede dejar el sistema o software inestable.`,
-      detail: `It is highly recommended to wait until the process finishes.
-Se recomienda esperar a que el proceso termine.`,
-      defaultId: 0,
-      cancelId: 0
-    }) === 1 && (t = !0, r = !1, i?.close()));
-  }), i.webContents.on("did-finish-load", () => {
-    i?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  }), s ? i.loadURL(s) : i.loadFile(n.join(process.env.DIST || "", "index.html"));
+    icon: path.join(process.env.VITE_PUBLIC, "logo.png")
+  });
+  win.on("close", (e) => {
+    if (forceClose) return;
+    if (isOperationActive) {
+      e.preventDefault();
+      const choice = dialog.showMessageBoxSync(win, {
+        type: "warning",
+        buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
+        title: "Operation in Progress / Operacion en progreso",
+        message: "An application update or restore point is currently in progress. Closing the app now could leave your system or software in an unstable state.\n\nHay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede dejar el sistema o software inestable.",
+        detail: "It is highly recommended to wait until the process finishes.\nSe recomienda esperar a que el proceso termine.",
+        defaultId: 0,
+        cancelId: 0
+      });
+      if (choice === 1) {
+        forceClose = true;
+        isOperationActive = false;
+        win?.close();
+      }
+    }
+  });
+  win.webContents.on("did-finish-load", () => {
+    win?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  });
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(process.env.DIST || "", "index.html"));
+  }
 }
-u.handle("system:set-operation-active", (t, e) => {
-  r = e;
+ipcMain.handle("system:set-operation-active", (_, active) => {
+  isOperationActive = active;
 });
-o.on("window-all-closed", () => {
-  process.platform !== "darwin" && o.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });
-o.on("activate", () => {
-  c.getAllWindows().length === 0 && d();
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });
-o.whenReady().then(async () => {
-  if (!await w()) {
-    l.showErrorBox(
+app.whenReady().then(async () => {
+  const isElevated = await ensureElevated();
+  if (!isElevated) {
+    dialog.showErrorBox(
       "Insufficient privileges / Privilegios insuficientes",
-      `All Updater requires Administrator permissions to manage Winget and create restore points.
-
-All Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion.`
-    ), o.quit();
+      "All Updater requires Administrator permissions to manage Winget and create restore points.\n\nAll Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion."
+    );
+    app.quit();
     return;
   }
-  const { setupIPC: e } = await import("./ipc-DJEUxGsr.js");
-  e(), d();
+  const { setupIPC } = await import("./ipc-DYeW8Mfq.js");
+  setupIPC();
+  createWindow();
 });

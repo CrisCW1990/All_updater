@@ -88,26 +88,26 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
     return (
         <div className="space-y-6 relative">
             {showClearConfirm && (
-                <div className="absolute top-0 right-0 left-0 z-50 flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-red-200 dark:border-red-900/50 animate-in fade-in slide-in-from-top-2">
+                <div className="absolute top-0 right-0 left-0 z-50 flex items-center justify-between p-4 bg-md-surface-container-high rounded-lg shadow-xl border border-md-error/30 animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
+                        <div className="p-2 bg-md-error-container rounded-full text-md-error">
                             <AlertCircle className="h-5 w-5" />
                         </div>
                         <div>
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm">{t('resetAppConfirm')}</h4>
-                            <p className="text-xs text-slate-600 dark:text-slate-400">{t('resetAppMessage')}</p>
+                            <h4 className="font-black uppercase tracking-tight text-md-on-surface text-sm">{t('resetAppConfirm')}</h4>
+                            <p className="text-xs font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest">{t('resetAppMessage')}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setShowClearConfirm(false)}
-                            className="px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-md transition-colors"
+                            className="px-3 py-1.5 text-xs font-black uppercase tracking-widest text-md-on-surface-variant hover:bg-md-on-surface/5 rounded-md transition-colors"
                         >
                             {t('cancel')}
                         </button>
                         <button
                             onClick={handleClearHistory}
-                            className="px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm transition-colors"
+                            className="px-3 py-1.5 text-xs font-black uppercase tracking-widest text-white bg-md-error hover:bg-md-error/90 rounded-md shadow-sm transition-colors"
                         >
                             {t('confirm')}
                         </button>
@@ -117,15 +117,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
 
             <header className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white transition-colors">{t('history')}</h2>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    <h2 className="text-2xl font-black uppercase tracking-tight text-md-on-surface transition-colors">{t('history')}</h2>
+                    <p className="text-sm font-black text-md-on-surface-variant opacity-70 uppercase tracking-widest">
                         {t('historyRecord')}
                     </p>
                 </div>
                 {!showClearConfirm && (
                     <button
                         onClick={() => setShowClearConfirm(true)}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 transition-colors font-medium border border-red-200 dark:border-transparent"
+                        className="text-[10px] px-4 py-2 rounded-full bg-md-error-container text-md-on-error-container hover:bg-md-error-container/80 transition-all font-black uppercase tracking-widest border border-md-error/20"
                     >
                         {t('resetApp')}
                     </button>
@@ -145,10 +145,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                             key={option.id}
                             onClick={() => setFilter(option.id as typeof filter)}
                             className={clsx(
-                                "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
+                                "rounded-full border px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all",
                                 filter === option.id
-                                    ? "border-blue-500 bg-blue-600 text-white"
-                                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                                    ? "border-md-primary bg-md-primary text-md-on-primary shadow-md"
+                                    : "border-md-outline-variant bg-md-surface-container-low text-md-on-surface-variant hover:bg-md-surface-container-high hover:text-md-on-surface"
                             )}
                         >
                             {option.label}
@@ -158,28 +158,31 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
             )}
 
             {history.length === 0 ? (
-                <div className="flex h-64 flex-col items-center justify-center space-y-4 text-slate-600 dark:text-slate-400">
-                    <Clock className="h-16 w-16" />
-                    <h2 className="text-xl font-bold">{t('historyEmpty')}</h2>
-                    <p>{t('historyEmptySmall')}</p>
+                <div className="flex h-64 flex-col items-center justify-center space-y-4 text-md-on-surface-variant/40">
+                    <Clock className="h-16 w-16" strokeWidth={1.5} />
+                    <div className="text-center">
+                        <h2 className="text-xl font-black uppercase tracking-tight text-md-on-surface opacity-60">{t('historyEmpty')}</h2>
+                        <p className="text-sm font-bold uppercase tracking-[0.2em]">{t('historyEmptySmall')}</p>
+                    </div>
                 </div>
             ) : filteredHistory.length === 0 ? (
-                <div className="flex h-64 flex-col items-center justify-center space-y-2 text-slate-600 dark:text-slate-400">
+                <div className="flex h-64 flex-col items-center justify-center space-y-2 text-md-on-surface-variant/40">
                     <AlertCircle className="h-10 w-10" />
-                    <p className="text-sm font-medium">{t('historyEmptySmall')}</p>
+                    <p className="text-sm font-black uppercase tracking-widest">{t('historyEmptySmall')}</p>
                 </div>
             ) : (
-                <div className="relative space-y-10 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent dark:before:via-white/5">
+                <div className="relative space-y-10 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-md-outline-variant/30 before:to-transparent">
                     {filteredHistory.map((item, idx) => (
                         <div key={idx} className="relative flex items-start group">
+                            {/* Icon Indicator */}
                             <div className={clsx(
-                                "absolute left-0 flex h-10 w-10 items-center justify-center rounded-full border-4 transition-all duration-300",
-                                item.status === 'success' ? "bg-green-500 border-green-500/20 text-white" :
-                                    item.status === 'reboot' ? "bg-blue-600 border-blue-500/20 text-white" :
+                                "absolute left-0 flex h-10 w-10 items-center justify-center rounded-full border-4 transition-all duration-300 shadow-sm",
+                                item.status === 'success' ? "bg-emerald-500 border-emerald-500/20 text-white" :
+                                    item.status === 'reboot' ? "bg-md-primary border-md-primary/20 text-md-on-primary" :
                                         item.status === 'in-use' ? "bg-amber-500 border-amber-500/20 text-white" :
-                                            item.status === 'inapplicable' ? "bg-amber-500 border-amber-500/20 text-white" :
+                                            item.status === 'inapplicable' ? "bg-md-surface-variant border-md-outline-variant text-md-on-surface-variant" :
                                                 item.status === 'security-error' ? "bg-orange-600 border-orange-500/20 text-white" :
-                                                    "bg-red-500 border-red-500/20 text-white"
+                                                    "bg-md-error border-md-error/20 text-md-on-error"
                             )}>
                                 {item.status === 'success' && <CheckCircle2 className="h-5 w-5" />}
                                 {item.status === 'reboot' && <RefreshCw className="h-5 w-5" />}
@@ -190,36 +193,35 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onResetApp }) => {
                                 {item.status === 'skipped' && <AlertCircle className="h-5 w-5 opacity-70" />}
                             </div>
 
-                            <div className="ml-16 w-full rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-300 dark:bg-white/5 dark:ring-white/10 transition-all duration-300 group-hover:shadow-md dark:group-hover:bg-white/10">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-bold text-slate-900 dark:text-white truncate">{item.appName}</h3>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-400">
-                                        <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                            <div className="ml-16 w-full rounded-2xl bg-md-surface-container-low p-6 shadow-sm border border-md-outline-variant transition-all duration-300 group-hover:shadow-md group-hover:bg-md-surface-container-high group-hover:border-md-primary/20">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-lg font-black uppercase tracking-tight text-md-on-surface truncate">{item.appName}</h3>
+                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-md-on-surface-variant opacity-60">
+                                        <Clock className="h-3 w-3 text-md-primary" />
                                         {new Date(item.date).toLocaleString()}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-400">
-                                    <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-800 dark:bg-white/10 dark:text-slate-300">
+                                <div className="flex items-center gap-3 text-xs">
+                                    <span className="rounded-full bg-md-surface-variant px-3 py-1 text-[9px] font-black uppercase tracking-widest text-md-on-surface-variant">
                                         {item.previousVersion
-                                            ? `${formatVersionValue(item.previousVersion)} -> ${formatVersionValue(item.version)}`
+                                            ? `${formatVersionValue(item.previousVersion)} → ${formatVersionValue(item.version)}`
                                             : formatVersionValue(item.version)}
                                     </span>
-                                    <span className="h-1 w-1 rounded-full bg-slate-400 dark:bg-slate-700" />
-                                    <span className={clsx(
-                                        "font-medium italic",
-                                        item.status === 'success' ? "text-green-600 dark:text-green-400" :
-                                            item.status === 'reboot' ? "text-blue-600 dark:text-blue-400" :
-                                                item.status === 'in-use' ? "text-amber-600 dark:text-amber-400" :
-                                                    item.status === 'inapplicable' ? "text-amber-600 dark:text-amber-400" :
-                                                        item.status === 'security-error' ? "text-orange-600 dark:text-orange-400" :
-                                                            "text-red-600 dark:text-red-400"
+                                    <div className={clsx(
+                                        "font-black uppercase tracking-widest text-[10px] italic",
+                                        item.status === 'success' ? "text-emerald-500" :
+                                            item.status === 'reboot' ? "text-md-primary" :
+                                                item.status === 'in-use' ? "text-amber-500" :
+                                                    item.status === 'inapplicable' ? "text-md-on-surface-variant opacity-60" :
+                                                        item.status === 'security-error' ? "text-orange-600" :
+                                                            "text-md-error"
                                     )}>
                                         {getSatiricalStatus(item)}
-                                    </span>
+                                    </div>
                                 </div>
                                 {item.details && (
-                                    <div className="mt-3 rounded border border-slate-200 bg-slate-100 p-3 text-xs font-mono text-slate-700 overflow-x-auto dark:border-white/5 dark:bg-black/20 dark:text-slate-400">
+                                    <div className="mt-4 rounded-xl border border-md-outline-variant bg-md-surface-container-highest/50 p-4 text-[10px] font-mono text-md-on-surface-variant/80 overflow-x-auto">
                                         {item.details}
                                     </div>
                                 )}

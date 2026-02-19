@@ -1,6 +1,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { LayoutDashboard, History, Moon, Sun, Languages, Info, ExternalLink } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
 import logo from '../assets/logo.png';
 import { TroubleshootingModal } from './TroubleshootingModal';
@@ -126,23 +127,37 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                             <Languages className="h-4 w-4" />
                             {t('language')}
                         </div>
-                        <div className="flex bg-md-surface-container-low rounded-full p-1">
-                            <button
+                        <div className="flex bg-md-surface-container-low rounded-full p-1 relative">
+                            <motion.button
                                 onClick={() => setLanguage('en')}
                                 className={clsx(
-                                    "px-3 py-1.5 rounded-full text-[10px] font-black transition-all",
-                                    language === 'en' ? "bg-md-primary text-md-on-primary shadow-sm" : "text-md-on-surface-variant hover:text-md-on-surface"
+                                    "relative z-10 px-3 py-1.5 rounded-full text-[10px] font-black transition-colors",
+                                    language === 'en' ? "text-md-on-primary" : "text-md-on-surface-variant hover:text-md-on-surface"
                                 )}>
+                                {language === 'en' && (
+                                    <motion.div
+                                        layoutId="activeLang"
+                                        className="absolute inset-0 bg-md-primary rounded-full -z-10"
+                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                    />
+                                )}
                                 EN
-                            </button>
-                            <button
+                            </motion.button>
+                            <motion.button
                                 onClick={() => setLanguage('es')}
                                 className={clsx(
-                                    "px-3 py-1.5 rounded-full text-[10px] font-black transition-all",
-                                    language === 'es' ? "bg-md-primary text-md-on-primary shadow-sm" : "text-md-on-surface-variant hover:text-md-on-surface"
+                                    "relative z-10 px-3 py-1.5 rounded-full text-[10px] font-black transition-colors",
+                                    language === 'es' ? "text-md-on-primary" : "text-md-on-surface-variant hover:text-md-on-surface"
                                 )}>
+                                {language === 'es' && (
+                                    <motion.div
+                                        layoutId="activeLang"
+                                        className="absolute inset-0 bg-md-primary rounded-full -z-10"
+                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                    />
+                                )}
                                 ES
-                            </button>
+                            </motion.button>
                         </div>
                     </div>
 
@@ -151,14 +166,28 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
                         onClick={toggleDarkMode}
                         className="flex w-full items-center justify-between rounded-full bg-md-surface-container-high px-4 py-3 text-sm font-bold text-md-on-surface-variant hover:bg-md-surface-container-highest transition-all duration-300">
                         <span className="flex items-center gap-3">
-                            {darkMode ? <Moon className="h-4 w-4 text-md-primary" /> : <Sun className="h-4 w-4 text-md-primary" />}
+                            <AnimatePresence mode="wait" initial={false}>
+                                <motion.div
+                                    key={darkMode ? 'moon' : 'sun'}
+                                    initial={{ y: 5, opacity: 0, rotate: -45 }}
+                                    animate={{ y: 0, opacity: 1, rotate: 0 }}
+                                    exit={{ y: -5, opacity: 0, rotate: 45 }}
+                                    transition={{ duration: 0.2 }}
+                                >
+                                    {darkMode ? <Moon className="h-4 w-4 text-md-primary" /> : <Sun className="h-4 w-4 text-md-primary" />}
+                                </motion.div>
+                            </AnimatePresence>
                             {darkMode ? t('darkMode') : t('lightMode')}
                         </span>
                         <div className={clsx(
                             "h-6 w-12 p-1 rounded-full flex items-center transition-all duration-500",
-                            darkMode ? "justify-end bg-md-primary" : "justify-start bg-md-surface-variant"
+                            darkMode ? "bg-md-primary" : "bg-md-surface-variant"
                         )}>
-                            <div className={clsx("h-4 w-4 rounded-full shadow-sm transition-colors", darkMode ? "bg-md-on-primary" : "bg-md-outline")} />
+                            <motion.div
+                                layout
+                                transition={{ type: "spring", stiffness: 700, damping: 30 }}
+                                className={clsx("h-4 w-4 rounded-full shadow-sm", darkMode ? "bg-md-on-primary ml-auto" : "bg-md-outline mr-auto")}
+                            />
                         </div>
                     </button>
                 </div>
@@ -166,10 +195,32 @@ export const Layout: React.FC<LayoutProps> = ({ children, darkMode, toggleDarkMo
 
             {/* Main Content - Surface (Background) */}
             <main className="relative flex flex-1 flex-col overflow-hidden bg-md-surface transition-colors duration-300">
-                <div className="flex-1 overflow-y-auto">
-                    <div className="max-w-7xl mx-auto p-4 lg:p-8">
-                        {children}
-                    </div>
+                <div className="flex-1 overflow-y-auto relative">
+                    {/* Render modals/global children separately to prevent duplication during transitions */}
+                    {React.Children.map(children, child => {
+                        if (React.isValidElement(child) && typeof child.type !== 'string' && (child.type as any).name?.toLowerCase().includes('modal')) {
+                            return child;
+                        }
+                        return null;
+                    })}
+
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={activeTab + language + darkMode}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="max-w-7xl mx-auto p-4 lg:p-8"
+                        >
+                            {React.Children.map(children, child => {
+                                if (React.isValidElement(child) && typeof child.type !== 'string' && (child.type as any).name?.toLowerCase().includes('modal')) {
+                                    return null;
+                                }
+                                return child;
+                            })}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
             </main>
 

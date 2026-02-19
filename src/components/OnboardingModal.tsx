@@ -118,10 +118,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onClose }) => 
                                                 onChange={() => setDontShowAgain(!dontShowAgain)}
                                                 className="peer sr-only"
                                             />
-                                            {/* Checkbox with Surface/Primary colors, NO borders */}
+                                            {/* Checkbox with Surface/Primary colors - improved visibility */}
                                             <div className={clsx(
-                                                "h-6 w-6 rounded-md transition-all flex items-center justify-center",
-                                                dontShowAgain ? "bg-md-primary text-md-on-primary" : "bg-md-surface-variant text-transparent"
+                                                "h-6 w-6 rounded-md transition-all flex items-center justify-center border-2",
+                                                dontShowAgain
+                                                    ? "bg-md-primary border-md-primary text-md-on-primary"
+                                                    : "bg-md-surface-variant border-md-outline-variant text-transparent"
                                             )}>
                                                 <Check className={clsx("h-4 w-4 stroke-[4px] transition-opacity", dontShowAgain ? "opacity-100" : "opacity-0")} />
                                             </div>

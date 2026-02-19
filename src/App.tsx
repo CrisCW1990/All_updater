@@ -8,6 +8,7 @@ import { PreflightModal } from './components/PreflightModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ConflictModal } from './components/ConflictModal';
 import { HistoryView } from './components/HistoryView.tsx';
+import { AppUpdateModal } from './components/AppUpdateModal';
 import type {
   AppUpdate,
   AppVersionCheckResult,
@@ -16,7 +17,7 @@ import type {
   RestoreFailureReason,
   RestorePointResult
 } from './shared/types';
-import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText, FolderOpen } from 'lucide-react';
+import { RefreshCw, CheckCircle, Coffee, ArrowDownToLine, CheckSquare, Square, AlertCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
 import { ToastContainer, type ToastType } from './components/Toast';
 import { useLanguage } from './context/LanguageContext';
 import { clsx } from 'clsx';
@@ -57,6 +58,7 @@ export default function App() {
   const [checkingAppVersion, setCheckingAppVersion] = useState(false);
   const [downloadingAppUpdate, setDownloadingAppUpdate] = useState(false);
   const [appUpdateProgress, setAppUpdateProgress] = useState<number | null>(null);
+  const [showAppUpdateModal, setShowAppUpdateModal] = useState(false);
   const [lastDownloadedUpdatePath, setLastDownloadedUpdatePath] = useState<string | null>(null);
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null);
   const [runningPreflight, setRunningPreflight] = useState(false);
@@ -131,7 +133,12 @@ export default function App() {
 
       void window.ipcRenderer
         .invoke('system:check-app-update')
-        .then((result) => setAppUpdateInfo(result))
+        .then((result) => {
+          setAppUpdateInfo(result);
+          if (result.success && result.hasUpdate) {
+            setShowAppUpdateModal(true);
+          }
+        })
         .catch((error) => console.error('[App] Silent app-update check failed:', error));
     };
 
@@ -224,7 +231,7 @@ export default function App() {
       }
 
       if (result.hasUpdate) {
-        addToast(`${t('appUpdateAvailable')}: v${result.latestVersion}`, 'info');
+        setShowAppUpdateModal(true);
       } else {
         addToast(t('appUpdateNoUpdates'), 'info');
       }
@@ -599,7 +606,7 @@ export default function App() {
       onTabChange={setActiveTab}
     >
       {activeTab === 'dashboard' ? (
-        <div className="mx-auto flex w-full max-w-7xl h-full flex-col gap-8">
+        <div className="mx-auto flex w-full h-full flex-col gap-8">
           {/* Dashboard Header - M3 Style */}
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between px-2">
             <div>
@@ -617,7 +624,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 lg:flex-1 lg:justify-end">
               {!isInstalling && !isCreatingRestore && (
                 <button
                   onClick={() => checkAppUpdate(false)}
@@ -658,12 +665,16 @@ export default function App() {
               )}
 
               {(isInstalling || isCreatingRestore) && (
-                <div className="flex items-center gap-4 rounded-2xl bg-md-primary-container/50 px-6 py-3 border border-md-primary/20 backdrop-blur-sm">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  className="flex items-center gap-4 rounded-2xl bg-md-primary-container/50 px-6 py-3 border border-md-primary/20 backdrop-blur-sm"
+                >
                   <div className="h-2 w-2 rounded-full bg-md-primary animate-ping" />
                   <span className="text-sm font-black uppercase tracking-widest text-md-on-primary-container">
                     {isCreatingRestore ? t('creatingRestore') : `${t('updatingApp')} ${installProgress?.current || 0}/${installProgress?.total || 0}`}
                   </span>
-                </div>
+                </motion.div>
               )}
 
               {updates.length > 0 && !isInstalling && (
@@ -678,67 +689,6 @@ export default function App() {
               )}
             </div>
           </div>
-
-          {appUpdateInfo?.success && appUpdateInfo.hasUpdate && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 dark:border-blue-500/20 dark:bg-blue-900/10">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-blue-900 dark:text-blue-300">{t('appUpdateAvailable')}</p>
-                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                    {t('appUpdateCurrent')}: v{appUpdateInfo.currentVersion} • {t('appUpdateLatest')}: v{appUpdateInfo.latestVersion}
-                  </p>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    {t('appUpdatePrivacyNote')}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={downloadAppUpdate}
-                    disabled={downloadingAppUpdate || !appUpdateInfo.assetUrl || !appUpdateInfo.assetName}
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {downloadingAppUpdate ? t('appUpdateDownloading') : t('appUpdateDownload')}
-                  </button>
-                  {appUpdateInfo.releaseUrl && (
-                    <button
-                      onClick={() => window.ipcRenderer.invoke('system:open-url', appUpdateInfo.releaseUrl!)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-                    >
-                      {t('appUpdateOpenRelease')}
-                    </button>
-                  )}
-                  {lastDownloadedUpdatePath && (
-                    <button
-                      onClick={() => window.ipcRenderer.invoke('system:show-item-in-folder', lastDownloadedUpdatePath)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        <FolderOpen className="h-3.5 w-3.5" />
-                        {t('appUpdateOpenFolder')}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {downloadingAppUpdate && (
-                <div className="mt-3">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/30">
-                    <div
-                      className="h-full bg-blue-600 transition-all duration-300 dark:bg-blue-400"
-                      style={{ width: `${appUpdateProgress ?? 0}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] font-medium text-slate-700 dark:text-slate-400">
-                    {appUpdateProgress !== null
-                      ? `${t('appUpdateDownloading')} ${appUpdateProgress}%`
-                      : t('appUpdateDownloading')}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
 
           {isWingetMissing ? (
             <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-20 text-center">
@@ -788,71 +738,71 @@ export default function App() {
               </div>
             </div>
           ) : !hasChecked ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-12 py-24 text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
+            <div className="flex flex-1 flex-col items-center justify-center space-y-8 py-8 lg:py-24 text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
               <div className="relative">
                 <div className="absolute -inset-10 rounded-full bg-md-secondary-container/30 blur-[120px] animate-pulse" />
-                <div className="relative p-10 rounded-[40px] bg-md-surface-container-high shadow-2xl">
-                  <Coffee className="h-24 w-24 text-md-primary" strokeWidth={1.5} />
+                <div className="relative p-6 lg:p-10 rounded-[32px] lg:rounded-[40px] bg-md-surface-container-high shadow-2xl">
+                  <Coffee className="h-16 w-16 lg:h-24 lg:w-24 text-md-primary" strokeWidth={1.5} />
                 </div>
               </div>
 
-              <div className="max-w-lg space-y-4 px-6">
-                <h3 className="text-4xl font-black uppercase tracking-tight text-md-on-surface">{t('readyTitle')}</h3>
-                <p className="text-lg font-bold text-md-on-surface-variant leading-relaxed uppercase tracking-widest opacity-70">{t('readyDesc')}</p>
+              <div className="max-w-lg space-y-2 lg:space-y-4 px-6">
+                <h3 className="text-2xl lg:text-4xl font-black uppercase tracking-tight text-md-on-surface">{t('readyTitle')}</h3>
+                <p className="text-sm lg:text-lg font-bold text-md-on-surface-variant leading-relaxed uppercase tracking-widest opacity-70">{t('readyDesc')}</p>
               </div>
 
               <div className="relative group">
                 <div className="absolute -inset-1 bg-md-primary/20 blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
                 <button
                   onClick={checkUpdates}
-                  className="relative group flex items-center gap-4 overflow-hidden rounded-[24px] bg-md-primary px-10 py-6 text-xl font-black uppercase tracking-widest text-md-on-primary shadow-2xl transition-all hover:scale-[1.05] active:scale-95"
+                  className="relative group flex items-center gap-4 overflow-hidden rounded-[24px] bg-md-primary px-8 py-4 lg:px-10 lg:py-6 text-lg lg:text-xl font-black uppercase tracking-widest text-md-on-primary shadow-2xl transition-all hover:scale-[1.05] active:scale-95"
                 >
-                  <RefreshCw className="h-8 w-8 transition-transform duration-700 group-hover:rotate-180" />
+                  <RefreshCw className="h-6 w-6 lg:h-8 lg:w-8 transition-transform duration-700 group-hover:rotate-180" />
                   {t('checkUpdates')}
                 </button>
               </div>
 
-              <p className="text-sm font-black text-md-on-surface-variant/40 uppercase tracking-[0.3em] max-w-2xl px-8 leading-loose transition-all hover:text-md-primary/50 cursor-default">
+              <p className="text-[10px] lg:text-sm font-black text-md-on-surface-variant/40 uppercase tracking-[0.3em] max-w-2xl px-8 leading-loose transition-all hover:text-md-primary/50 cursor-default">
                 {t('footerLove')} <span className="text-md-primary">Samuel</span>.
                 <br />
                 {t('footerAI')}
-                <span className="inline-block align-middle ml-3">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-md-error opacity-70 animate-pulse">
+                <span className="inline-block align-middle ml-2 lg:ml-3">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-md-error opacity-70 animate-pulse lg:w-6 lg:h-6">
                     <path d="M4 4h4v4H4zM16 4h4v4h-4zM2 8h4v4H2zM8 8h8v4H8zM18 8h4v4h-4zM2 12h4v4H2zM6 16h4v4H6zM10 20h4v4h-4zM14 16h4v4h-4zM18 12h4v4h-4z" fill="currentColor" />
                   </svg>
                 </span>
               </p>
             </div>
           ) : updates.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center space-y-6 py-20 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center space-y-4 lg:space-y-6 py-12 lg:py-20 text-center">
               <div className="relative">
                 <div className="absolute -inset-4 rounded-full bg-emerald-500/20 blur-xl dark:bg-emerald-400/10" />
-                <CheckCircle className="relative h-24 w-24 text-emerald-600 dark:text-emerald-500" strokeWidth={1} />
+                <CheckCircle className="relative h-16 w-16 lg:h-24 lg:w-24 text-emerald-600 dark:text-emerald-500" strokeWidth={1} />
               </div>
-              <h3 className="text-2xl font-bold text-black dark:text-white">{t('allClean')}</h3>
-              <p className="font-medium text-slate-700 dark:text-slate-400 text-lg">{t('allCleanDesc')}</p>
+              <h3 className="text-xl lg:text-2xl font-black uppercase tracking-tight text-md-on-surface">{t('allClean')}</h3>
+              <p className="font-black text-md-on-surface-variant opacity-70 text-base lg:text-lg uppercase tracking-widest">{t('allCleanDesc')}</p>
               <button
                 onClick={checkUpdates}
-                className="mt-4 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                className="mt-4 lg:mt-6 px-6 py-3 rounded-full bg-md-secondary-container text-md-on-secondary-container text-sm font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm"
               >
                 {t('checkAgain')}
               </button>
             </div>
           ) : (
             <div className="space-y-4 pb-24">
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 backdrop-blur-md dark:border-white/10 dark:bg-black/20">
+              <div className="flex items-center justify-between rounded-xl border border-md-outline-variant bg-md-surface-container-high px-4 py-3 backdrop-blur-md">
                 <button
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-3 text-sm font-medium text-slate-700 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
+                  className="flex items-center gap-3 text-sm font-bold text-md-on-surface-variant hover:text-md-primary transition-colors"
                 >
                   {allSelectableSelected ? (
-                    <CheckSquare className="h-5 w-5 text-blue-500" />
+                    <CheckSquare className="h-5 w-5 text-md-primary shadow-sm" />
                   ) : (
-                    <Square className="h-5 w-5 text-slate-400" />
+                    <Square className="h-5 w-5 text-md-outline" />
                   )}
                   <span>{t('selectAll')}</span>
                 </button>
-                <span className="text-sm font-medium text-slate-500">
+                <span className="text-sm font-black uppercase tracking-widest text-md-primary opacity-60">
                   {updates.length} {t('updatesAvailable')}
                 </span>
               </div>
@@ -886,21 +836,21 @@ export default function App() {
 
       {/* Summary Report Modal */}
       {showSummary && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md transition-all p-4">
-          <div className="w-full max-w-xl rounded-3xl bg-white p-8 shadow-2xl dark:bg-slate-800 border border-black/10 dark:border-white/10 max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all p-4">
+          <div className="w-full max-w-xl rounded-3xl bg-md-surface-container-high p-8 shadow-2xl border border-md-outline-variant max-h-[80vh] flex flex-col relative overflow-hidden">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{t('summaryTitle')}</h3>
-                <p className="text-slate-700 dark:text-slate-400">{t('summaryDesc')}</p>
+                <h3 className="text-2xl font-black uppercase tracking-tight text-md-on-surface">{t('summaryTitle')}</h3>
+                <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest">{t('summaryDesc')}</p>
               </div>
               <button
                 onClick={() => {
                   setShowSummary(false);
                   checkUpdates();
                 }}
-                className="rounded-full p-2 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                className="rounded-full p-2 hover:bg-md-on-surface/10 transition-colors"
               >
-                <XCircle className="h-6 w-6 text-slate-500" />
+                <XCircle className="h-6 w-6 text-md-on-surface-variant" />
               </button>
             </div>
 
@@ -921,8 +871,8 @@ export default function App() {
                 }
 
                 return (
-                  <div className="mb-4 rounded-2xl border border-slate-300 bg-slate-100 p-6 dark:border-white/10 dark:bg-white/5">
-                    <p className="text-xl text-slate-700 dark:text-slate-200 italic text-center font-medium leading-relaxed">
+                  <div className="mb-4 rounded-2xl border border-md-primary/20 bg-md-primary-container/30 p-6">
+                    <p className="text-xl text-md-on-primary-container italic text-center font-black uppercase tracking-tight leading-relaxed">
                       {message}
                     </p>
                   </div>
@@ -930,7 +880,7 @@ export default function App() {
               })()}
 
               {batchResults.map((res, i) => (
-                <div key={i} className="flex items-center gap-4 rounded-2xl border border-slate-300 bg-slate-100 p-4 dark:border-white/5 dark:bg-white/5">
+                <div key={i} className="flex items-center gap-4 rounded-2xl border border-md-outline-variant bg-md-surface-container-low p-4">
                   <div className={clsx(
                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm",
                     res.status === 'success' ? "bg-green-500 text-white" :
@@ -948,11 +898,11 @@ export default function App() {
                     {res.status === 'failed' && <XCircle className="h-5 w-5" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-slate-900 dark:text-white truncate">{res.appName}</h4>
-                    <p className="text-[10px] text-slate-700 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">
+                    <h4 className="font-bold text-md-on-surface truncate">{res.appName}</h4>
+                    <p className="text-[10px] text-md-primary font-black uppercase tracking-widest mb-1 opacity-70">
                       {t('versionLabel')} {res.version}
                     </p>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 italic font-medium">
+                    <p className="text-xs text-md-on-surface-variant italic font-bold">
                       {res.status === 'success' ? t('statusSuccess') :
                         res.status === 'reboot' ? t('statusReboot') :
                           res.status === 'in-use' ? t('statusInUse') :
@@ -979,7 +929,7 @@ export default function App() {
                 setShowSummary(false);
                 checkUpdates();
               }}
-              className="mt-8 w-full rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-700 dark:hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98]"
+              className="mt-8 w-full rounded-2xl bg-md-primary py-4 font-black uppercase tracking-widest text-md-on-primary shadow-xl shadow-md-primary/20 transition-all hover:bg-md-primary/90 hover:scale-[1.02] active:scale-95"
             >
               {(() => {
                 const total = batchResults.length;
@@ -1036,6 +986,20 @@ export default function App() {
       {/* Onboarding Modal */}
       {showOnboarding && <OnboardingModal onClose={handleOnboardingClose} />}
 
+      <AppUpdateModal
+        isOpen={showAppUpdateModal}
+        onClose={() => {
+          setShowAppUpdateModal(false);
+          if (!downloadingAppUpdate && !lastDownloadedUpdatePath) {
+            addToast(t('appUpdateDownloadCanceled'), 'warning');
+          }
+        }}
+        updateInfo={appUpdateInfo}
+        onDownload={downloadAppUpdate}
+        downloading={downloadingAppUpdate}
+        progress={appUpdateProgress}
+      />
+
       <RestoreModal
         isOpen={showRestoreModal}
         onClose={() => setShowRestoreModal(false)}
@@ -1044,15 +1008,15 @@ export default function App() {
       />
 
       {isCreatingRestore && (
-        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-md transition-all">
-          <div className="flex flex-col items-center space-y-6 rounded-3xl bg-white p-12 shadow-2xl dark:bg-slate-800 border border-white/10">
+        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all">
+          <div className="flex flex-col items-center space-y-6 rounded-3xl bg-md-surface-container-high p-12 shadow-2xl border border-md-outline-variant">
             <div className="relative">
-              <div className="absolute -inset-4 rounded-full bg-blue-500/20 blur-xl animate-pulse" />
-              <RefreshCw className="relative h-16 w-16 animate-spin text-blue-600 dark:text-blue-400" />
+              <div className="absolute -inset-4 rounded-full bg-md-primary/20 blur-xl animate-pulse" />
+              <RefreshCw className="relative h-16 w-16 animate-spin text-md-primary" />
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-xl font-bold text-slate-800 dark:text-white">{t('creatingRestore')}</h3>
-              <p className="text-slate-600 dark:text-slate-400 max-w-xs">
+              <h3 className="text-xl font-black uppercase tracking-tight text-md-on-surface">{t('creatingRestore')}</h3>
+              <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest max-w-xs">
                 {t('restoreWait')}
               </p>
             </div>
@@ -1061,27 +1025,28 @@ export default function App() {
       )}
 
       {isInstalling && !isCreatingRestore && (
-        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-md transition-all">
-          <div className="flex flex-col items-center space-y-6 rounded-3xl bg-white p-12 shadow-2xl dark:bg-slate-800 border border-white/10">
+        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-md-scrim/60 backdrop-blur-md transition-all">
+          <div className="flex flex-col items-center space-y-6 rounded-3xl bg-md-surface-container-high p-12 shadow-2xl border border-md-outline-variant">
             <div className="relative">
-              <div className="absolute -inset-4 rounded-full bg-blue-500/20 blur-xl animate-pulse" />
-              <ArrowDownToLine className="relative h-16 w-16 animate-bounce text-blue-600 dark:text-blue-400" />
+              <div className="absolute -inset-4 rounded-full bg-md-primary/20 blur-xl animate-pulse" />
+              <ArrowDownToLine className="relative h-16 w-16 animate-bounce text-md-primary" />
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-xl font-bold text-slate-800 dark:text-white">{t('installingUpdates')}</h3>
-              <p className="text-slate-600 dark:text-slate-400 max-w-xs font-medium">
-                {t('updatingApp')} <span className="text-blue-600 dark:text-blue-400">{currentInstallingApp}</span>
+              <h3 className="text-xl font-black uppercase tracking-tight text-md-on-surface">{t('installingUpdates')}</h3>
+              <p className="text-sm font-bold text-md-on-surface-variant opacity-70 uppercase tracking-widest max-w-xs">
+                {t('updatingApp')} <span className="text-md-primary">{currentInstallingApp}</span>
               </p>
               {currentLogLine && (
-                <p className="text-[10px] text-blue-700/80 dark:text-blue-400/50 italic animate-pulse truncate max-w-[250px]">
+                <p className="text-[10px] text-md-primary opacity-50 italic animate-pulse truncate max-w-[250px]">
                   {currentLogLine}
                 </p>
               )}
             </div>
-            <div className="h-1.5 w-64 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-              <div
-                className="h-full bg-blue-600 transition-all duration-500 dark:bg-blue-500"
-                style={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}
+            <div className="h-1.5 w-64 overflow-hidden rounded-full bg-md-surface-container-low">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${((installProgress?.current || 0) / (installProgress?.total || 1)) * 100}%` }}
+                className="h-full bg-md-primary shadow-sm shadow-md-primary/20"
               />
             </div>
           </div>
