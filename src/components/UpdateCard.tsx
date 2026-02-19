@@ -1,7 +1,7 @@
 import React from 'react';
 import type { AppUpdate } from '../shared/types';
 import { clsx } from 'clsx';
-import { AlertCircle, ArrowRight, Check } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, Box } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -55,13 +55,18 @@ export const UpdateCard: React.FC<UpdateCardProps> = ({ update, isSelected, onTo
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-3 mb-1">
-                        <h3 className={clsx(
-                            "text-sm font-bold tracking-tight truncate leading-tight",
-                            isSelected ? "text-md-on-secondary-container" : "text-md-on-surface"
-                        )}>
-                            {update.name}
-                        </h3>
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="h-8 w-8 rounded-lg bg-md-primary/10 flex items-center justify-center text-md-primary shrink-0">
+                            <Box className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className={clsx(
+                                "text-sm font-bold tracking-tight truncate leading-tight",
+                                isSelected ? "text-md-on-secondary-container" : "text-md-on-surface"
+                            )}>
+                                {update.name}
+                            </h3>
+                        </div>
                         <span className={clsx(
                             "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest",
                             isSelected ? "bg-md-on-secondary-container/10 text-md-on-secondary-container" : "bg-md-surface-container-highest text-md-on-surface-variant"

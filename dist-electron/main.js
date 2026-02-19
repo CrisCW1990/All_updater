@@ -1,122 +1,97 @@
-import { app, ipcMain, BrowserWindow, dialog } from "electron";
-import path from "path";
-import fs from "node:fs";
-import { fileURLToPath } from "url";
-const __filename$1 = fileURLToPath(import.meta.url);
-const __dirname$1 = path.dirname(__filename$1);
-process.env.DIST = path.join(__dirname$1, "../dist");
-process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, "../public");
-if (app.isPackaged) {
-  const portableBaseDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"));
-  const portableDataPath = path.join(portableBaseDir, "data");
-  let userDataPath = portableDataPath;
+import { app as a, ipcMain as w, BrowserWindow as d, dialog as u } from "electron";
+import r from "path";
+import l from "node:fs";
+import { fileURLToPath as h } from "url";
+const g = h(import.meta.url), m = r.dirname(g);
+process.env.DIST = r.join(m, "../dist");
+process.env.VITE_PUBLIC = a.isPackaged ? process.env.DIST : r.join(process.env.DIST, "../public");
+if (a.isPackaged) {
+  const t = process.env.PORTABLE_EXECUTABLE_DIR || r.dirname(a.getPath("exe")), e = r.join(t, "data");
+  let n = e;
   try {
-    fs.mkdirSync(portableDataPath, { recursive: true });
-    const probePath = path.join(portableDataPath, ".all-updater-write-test");
-    fs.writeFileSync(probePath, "ok", "utf8");
-    fs.unlinkSync(probePath);
-  } catch (error) {
-    console.warn("[Main] Portable data folder is not writable. Falling back to roaming appData.", error);
+    l.mkdirSync(e, { recursive: !0 });
+    const i = r.join(e, ".all-updater-write-test");
+    l.writeFileSync(i, "ok", "utf8"), l.unlinkSync(i);
+  } catch (i) {
+    console.warn("[Main] Portable data folder is not writable. Falling back to roaming appData.", i);
     try {
-      const fallbackPath = path.join(app.getPath("appData"), "All Updater", "data");
-      fs.mkdirSync(fallbackPath, { recursive: true });
-      userDataPath = fallbackPath;
-    } catch (fallbackError) {
-      console.warn("[Main] Roaming appData fallback is not writable. Keeping default userData path.", fallbackError);
+      const s = r.join(a.getPath("appData"), "All Updater", "data");
+      l.mkdirSync(s, { recursive: !0 }), n = s;
+    } catch (s) {
+      console.warn("[Main] Roaming appData fallback is not writable. Keeping default userData path.", s);
     }
   }
-  app.setPath("userData", userDataPath);
+  a.setPath("userData", n);
 }
-async function ensureElevated() {
+async function y() {
   try {
-    const { execa } = await import("./index-BsbJ0N1D.js").then((n) => n.i);
-    await execa("net", ["session"], { reject: true });
-    return true;
+    const { execa: t } = await import("./index-CWXQCQWA.js").then((e) => e.i);
+    return await t("net", ["session"], { reject: !0 }), !0;
   } catch {
     try {
-      const { execa } = await import("./index-BsbJ0N1D.js").then((n) => n.i);
-      const { stdout } = await execa("powershell", [
+      const { execa: t } = await import("./index-CWXQCQWA.js").then((n) => n.i), { stdout: e } = await t("powershell", [
         "-NoProfile",
         "-NonInteractive",
         "-Command",
         "([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
-      ], { reject: false });
-      return stdout.trim().toLowerCase() === "true";
+      ], { reject: !1 });
+      return e.trim().toLowerCase() === "true";
     } catch {
-      return false;
+      return !1;
     }
   }
 }
-let win;
-let isOperationActive = false;
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-function createWindow() {
-  let forceClose = false;
-  win = new BrowserWindow({
+let o, c = !1;
+const p = process.env.VITE_DEV_SERVER_URL;
+function f() {
+  let t = !1;
+  o = new d({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname$1, "preload.mjs"),
-      nodeIntegration: false,
-      contextIsolation: true
+      preload: r.join(m, "preload.mjs"),
+      nodeIntegration: !1,
+      contextIsolation: !0
     },
-    autoHideMenuBar: true,
+    autoHideMenuBar: !0,
     title: "All Updater",
-    icon: path.join(process.env.VITE_PUBLIC, "logo.png")
-  });
-  win.on("close", (e) => {
-    if (forceClose) return;
-    if (isOperationActive) {
-      e.preventDefault();
-      const choice = dialog.showMessageBoxSync(win, {
-        type: "warning",
-        buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
-        title: "Operation in Progress / Operacion en progreso",
-        message: "An application update or restore point is currently in progress. Closing the app now could leave your system or software in an unstable state.\n\nHay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede dejar el sistema o software inestable.",
-        detail: "It is highly recommended to wait until the process finishes.\nSe recomienda esperar a que el proceso termine.",
-        defaultId: 0,
-        cancelId: 0
-      });
-      if (choice === 1) {
-        forceClose = true;
-        isOperationActive = false;
-        win?.close();
-      }
-    }
-  });
-  win.webContents.on("did-finish-load", () => {
-    win?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  });
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(process.env.DIST || "", "index.html"));
-  }
+    icon: r.join(process.env.VITE_PUBLIC, "logo.png")
+  }), o.on("close", (e) => {
+    t || c && (e.preventDefault(), u.showMessageBoxSync(o, {
+      type: "warning",
+      buttons: ["Wait / Esperar", "Close Anyway (Dangerous) / Cerrar de todos modos (Peligroso)"],
+      title: "Operation in Progress / Operacion en progreso",
+      message: `An application update or restore point is currently in progress. Closing the app now could leave your system or software in an unstable state.
+
+Hay una actualizacion o punto de restauracion en progreso. Cerrar ahora puede dejar el sistema o software inestable.`,
+      detail: `It is highly recommended to wait until the process finishes.
+Se recomienda esperar a que el proceso termine.`,
+      defaultId: 0,
+      cancelId: 0
+    }) === 1 && (t = !0, c = !1, o?.close()));
+  }), o.webContents.on("did-finish-load", () => {
+    o?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), p ? o.loadURL(p) : o.loadFile(r.join(process.env.DIST || "", "index.html"));
 }
-ipcMain.handle("system:set-operation-active", (_, active) => {
-  isOperationActive = active;
+w.handle("system:set-operation-active", (t, e) => {
+  c = e;
 });
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+a.on("window-all-closed", () => {
+  process.platform !== "darwin" && a.quit();
 });
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+a.on("activate", () => {
+  d.getAllWindows().length === 0 && f();
 });
-app.whenReady().then(async () => {
-  const isElevated = await ensureElevated();
-  if (!isElevated) {
-    dialog.showErrorBox(
+a.whenReady().then(async () => {
+  if (!await y()) {
+    u.showErrorBox(
       "Insufficient privileges / Privilegios insuficientes",
-      "All Updater requires Administrator permissions to manage Winget and create restore points.\n\nAll Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion."
-    );
-    app.quit();
+      `All Updater requires Administrator permissions to manage Winget and create restore points.
+
+All Updater requiere permisos de Administrador para gestionar Winget y crear puntos de restauracion.`
+    ), a.quit();
     return;
   }
-  const { setupIPC } = await import("./ipc-HFq_je18.js");
-  setupIPC();
-  createWindow();
+  const { setupIPC: e } = await import("./ipc-DBdonJb5.js");
+  e(), f();
 });
