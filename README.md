@@ -1,3 +1,5 @@
+<img width="1437" height="845" alt="image" src="https://github.com/user-attachments/assets/8967a1f8-d398-4b15-955a-71bb785cc2f0" />
+
 # React + TypeScript + Vite
 
 ## Release hardening
